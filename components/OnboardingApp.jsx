@@ -27,6 +27,23 @@ const ACCENT_DEFAULTS = {
 // so it does NOT persist across an ordinary refresh.
 const XERO_RESUME_KEY = 'minty_onboarding_xero_resume';
 
+const STORAGE_KEY = 'minty_onboarding_session';
+
+// No signature verification — client-side cache invalidation only.
+function readJwtClaims(token) {
+  if (!token) return null;
+  try {
+    const part = token.split('.')[1];
+    if (!part) return null;
+    const padded = part.replace(/-/g, '+').replace(/_/g, '/');
+    const padding = '='.repeat((4 - (padded.length % 4)) % 4);
+    const payload = JSON.parse(atob(padded + padding));
+    return { user_id: payload.user_id || null, exp: payload.exp || 0 };
+  } catch {
+    return null;
+  }
+}
+
 const STEPS = [
   { id: 1, label: 'Basic Information', short: 'Basic Information', tiny: 'Basic' },
   { id: 2, label: 'Select Module', short: 'Select Module', tiny: 'Module' },
@@ -356,11 +373,32 @@ export default function OnboardingApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeIds.join(',')]);
 
+  // Without this gate the persist effect fires on first mount with the empty
+  // initialState and overwrites the saved session before the load effect can
+  // read it (effects run in declaration order, but setState calls from inside
+  // them don't take effect until the next render).
+  const hydratedRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!hydratedRef.current) return;
+    try {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ current, maxReached, state, token, profileUrl, user }),
+      );
+    } catch {
+      /* ignore quota / serialization errors */
+    }
+  }, [current, maxReached, state, token, profileUrl, user]);
+
   // Pick up the logged-in user (and optionally the new entity name) from the
   // launch URL that Module 1 opens after the entity is created. Falls back to
   // nothing if absent, so running the app standalone still works.
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    try { hydrateOnce(); } finally { hydratedRef.current = true; }
+    function hydrateOnce() {
     const p = new URLSearchParams(window.location.search);
 
     // Returning from the real Xero OAuth round-trip (Module 1 → Xero → here).
@@ -420,6 +458,35 @@ export default function OnboardingApp() {
       return;
     }
 
+    const urlToken = (p.get('token') || '').trim();
+    let saved = null;
+    try {
+      saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || 'null');
+    } catch {
+      /* ignore corrupt storage */
+    }
+    if (saved) {
+      const savedClaims = readJwtClaims(saved.token);
+      const urlClaims = readJwtClaims(urlToken);
+      const now = Math.floor(Date.now() / 1000);
+      const savedExpired = !!(savedClaims && savedClaims.exp && savedClaims.exp <= now);
+      const differentUser = !!(urlClaims && savedClaims && urlClaims.user_id !== savedClaims.user_id);
+      if (savedExpired || differentUser) {
+        try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+      } else {
+        if (urlToken) setToken(urlToken);
+        else if (saved.token) setToken(saved.token);
+        if (saved.profileUrl) setProfileUrl(saved.profileUrl);
+        if (saved.user) setUser(saved.user);
+        if (saved.state) setState(saved.state);
+        if (typeof saved.current === 'number' && saved.current >= 1) setCurrent(saved.current);
+        if (typeof saved.maxReached === 'number' && saved.maxReached >= 1) {
+          setMaxReached(saved.maxReached);
+        }
+        return;
+      }
+    }
+
     const first = (p.get('first') || '').trim();
     const last = (p.get('last') || '').trim();
     const name = (p.get('name') || '').trim();
@@ -434,6 +501,7 @@ export default function OnboardingApp() {
     if (t) setToken(t);
     const pu = (p.get('profile_url') || '').trim();
     if (pu) setProfileUrl(pu);
+    }
   }, []);
 
   // Kick off the real Xero OAuth flow (Step 3), mirroring Module 1's
@@ -783,6 +851,7 @@ export default function OnboardingApp() {
     if (!token || !state.entity.id) return { ok: true, redirect: false };
     const result = await submitOpeningBalance();
     if (!result?.ok) return result;
+    try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
     const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
     window.location.href = `${base}/entity/${state.entity.id}`;
     return { ok: true, redirect: true };
