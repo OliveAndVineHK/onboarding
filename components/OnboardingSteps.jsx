@@ -278,9 +278,23 @@ export function StepConnectXero({ state, set, next, back, skip, connectXero }) {
           <span className={'pill-status ' + (connected ? 'ok' : 'off')}>{connected ? 'Connected' : 'Not connected'}</span>
         </div>
         {connected ? (
-          <button className="btn btn-primary btn-block" style={{ marginTop: 16 }} onClick={() => set({ xero: { connected: false, org: '', lastConnected: '' } })}>
-            Disconnect from Xero
-          </button>
+          <div
+            className="btn btn-block"
+            style={{
+              marginTop: 16,
+              background: 'var(--accent-soft)',
+              color: 'var(--accent-ink)',
+              border: '1px solid var(--accent)',
+              cursor: 'default',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+            }}
+            aria-disabled="true"
+          >
+            <Icon.Check /> Xero Connected
+          </div>
         ) : (
           <button
             className="btn btn-primary btn-block"
