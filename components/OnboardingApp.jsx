@@ -848,10 +848,10 @@ export default function OnboardingApp() {
   // Commits the deferred opening balance, then redirects to the Module 1
   // dashboard. Returns { ok, redirect } so All Set can show errors / stay put.
   const finishOnboarding = async () => {
+    try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
     if (!token || !state.entity.id) return { ok: true, redirect: false };
     const result = await submitOpeningBalance();
     if (!result?.ok) return result;
-    try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
     const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
     window.location.href = `${base}/entity/${state.entity.id}`;
     return { ok: true, redirect: true };
