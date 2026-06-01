@@ -152,26 +152,61 @@ function FreeTrialPill({ heading = false, ripple = false }) {
   );
 }
 
-export function StepSelectModule({ state, set, next, back, skip }) {
+export function StepSelectModule({ state, set, next, back, skip, submitModule }) {
   const sel = state.modules.filter((id) => MODULES.some((m) => m.id === id));
-  const toggle = (id) => {
-    const has = sel.includes(id);
-    set({ modules: has ? sel.filter((x) => x !== id) : [...sel, id] });
+  // Single-select: clicking a card replaces the selection. Re-clicking the
+  // already-selected card is a no-op so users can't accidentally clear it; to
+  // switch, click the other card. State stays an array so the rest of the
+  // flow (getActiveStepIds / getDisplaySteps) keeps working unchanged.
+  const pick = (id) => {
+    if (sel.length === 1 && sel[0] === id) return;
+    set({ modules: [id] });
   };
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
+  const handleNext = async () => {
+    if (sel.length === 0 || saving) return;
+    setSaveError('');
+    if (typeof submitModule === 'function') {
+      setSaving(true);
+      const result = await submitModule();
+      setSaving(false);
+      if (!result?.ok) {
+        setSaveError(result?.error || 'Failed to save module selection. Please try again.');
+        return;
+      }
+    }
+    next();
+  };
+
   return (
     <>
       <div className="page-head">
         <h2 className="module-title">
-          Choose your modules <FreeTrialPill heading ripple />
+          Choose a module <FreeTrialPill heading ripple />
         </h2>
-        <p>Pick the services you&apos;d like to enable. You can change this any time in settings.</p>
+        <p>Pick the module you&apos;d like to start with. You can add more later from settings.</p>
       </div>
       <div className="module-grid module-grid-2">
         {MODULES.map((m) => {
           const I = m.icon ? Icon[m.icon] : null;
           const on = sel.includes(m.id);
           return (
-            <div key={m.id} className={'module-pick' + (on ? ' selected' : '')} onClick={() => toggle(m.id)}>
+            <div
+              key={m.id}
+              role="radio"
+              aria-checked={on}
+              tabIndex={0}
+              className={'module-pick' + (on ? ' selected' : '')}
+              onClick={() => pick(m.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  pick(m.id);
+                }
+              }}
+            >
               <div className="mp-frame">
                 <div className="mp-card">
                   <div className="mp-art" style={{ '--art-accent': m.accent }}>
@@ -199,21 +234,20 @@ export function StepSelectModule({ state, set, next, back, skip }) {
         })}
       </div>
       <p className="module-caption">
-        *Each module requires 280HKD /month subscription. Service is free during free trial period.
-        <br />
-        User can enjoy both modules for 400HKD per month discount package.
+        *Each module is 280HKD /month subscription, free during your trial period.
       </p>
       <div className="step-nav">
         <button className="btn btn-ghost" onClick={back}>
           <Icon.ArrowLeft /> Back
         </button>
         <div className="module-nav">
-          <button className="btn btn-primary" disabled={sel.length === 0} onClick={next}>
-            Save &amp; Next <Icon.Arrow />
+          <button className="btn btn-primary" disabled={sel.length === 0 || saving} onClick={handleNext}>
+            {saving ? 'Saving…' : <>Save &amp; Next <Icon.Arrow /></>}
           </button>
           {sel.length === 0 && (
-            <div className="module-require">You must select at least one service to continue with your registration process.</div>
+            <div className="module-require">You must pick a module to continue with your registration process.</div>
           )}
+          {saveError && <div className="module-require">{saveError}</div>}
         </div>
       </div>
     </>

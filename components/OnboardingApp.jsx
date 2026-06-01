@@ -557,6 +557,32 @@ export default function OnboardingApp() {
     }
   };
 
+  // Persist the Step 2 module choice. Maps FE ids (pettyCash, bills) → backend
+  // codes (PETTY_CASH, BILL) and POSTs to /api/onboarding/modules, which
+  // upserts both rows in entity_function_map (selected on, the other off).
+  // Standalone (no Module 1 handoff) is a no-op so the prototype still runs.
+  const submitModule = async () => {
+    if (!token || !state.entity.id) return { ok: true };
+    const sel = state.modules[0];
+    if (!sel) return { ok: false, error: 'Pick a module first.' };
+    const moduleCode =
+      sel === 'pettyCash' ? 'PETTY_CASH' : sel === 'bills' ? 'BILL' : '';
+    if (!moduleCode) return { ok: false, error: 'Unknown module.' };
+    const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
+    try {
+      const res = await fetch(`${base}/api/onboarding/modules`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ entity_id: state.entity.id, module: moduleCode }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: data.error || 'Failed to save module selection. Please try again.' };
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'Could not reach the server. Please try again.' };
+    }
+  };
+
   const submitSalesMethods = async () => {
     if (!token || !state.entity.id) return { ok: true };
     const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
@@ -845,15 +871,25 @@ export default function OnboardingApp() {
       });
   }, [current, token, state.entity.id]);
 
-  // Commits the deferred opening balance, then redirects to the Module 1
-  // dashboard. Returns { ok, redirect } so All Set can show errors / stay put.
+  // Commits the deferred opening balance (when petty cash was the
+  // selection) then redirects to the right module's landing page.
+  // Bill-only users skip the opening-balance commit and go straight to
+  // Module 2's Bills home via Module 1's /entity/<id>/bills handoff
+  // (which mints the JWT and forwards). Returns { ok, redirect } so
+  // All Set can show errors / stay put.
   const finishOnboarding = async () => {
     try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
     if (!token || !state.entity.id) return { ok: true, redirect: false };
-    const result = await submitOpeningBalance();
-    if (!result?.ok) return result;
+    const chosen = state.modules[0]; // 'pettyCash' | 'bills' | undefined
+    if (chosen !== 'bills') {
+      const result = await submitOpeningBalance();
+      if (!result?.ok) return result;
+    }
     const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
-    window.location.href = `${base}/entity/${state.entity.id}`;
+    const dest = chosen === 'bills'
+      ? `${base}/entity/${state.entity.id}/bills`
+      : `${base}/entity/${state.entity.id}`;
+    window.location.href = dest;
     return { ok: true, redirect: true };
   };
 
@@ -910,7 +946,7 @@ export default function OnboardingApp() {
     r.style.setProperty('--accent-hover', ACCENT_DEFAULTS.accent);
   }, []);
 
-  const stepProps = { state, set, next, back, skip, restart, submitEntity, connectXero, submitSalesMethods, accountOptions, submitAccountCodes, submitContacts, submitBills, submitInvite, cancelInvite, finishOnboarding };
+  const stepProps = { state, set, next, back, skip, restart, submitEntity, submitModule, connectXero, submitSalesMethods, accountOptions, submitAccountCodes, submitContacts, submitBills, submitInvite, cancelInvite, finishOnboarding };
 
   return (
     <>
