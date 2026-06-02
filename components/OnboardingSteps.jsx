@@ -581,14 +581,16 @@ function AccountCodesCard({ codes, value, onChange, labels }) {
   );
 }
 
-function PCSection({ title, fields }) {
+function PCSection({ title, fields, cardRef }) {
+  const cardHasError = fields.some((f) => f.error);
   return (
-    <div className="pc-card">
+    <div className={'pc-card' + (cardHasError ? ' is-error' : '')} ref={cardRef}>
       <div className="pc-title">{title}</div>
       {fields.map((f, i) => (
-        <div className="pc-field" key={i}>
+        <div className={'pc-field' + (f.error ? ' field-error' : '')} key={i}>
           <div className="pc-sub">{f.label}</div>
           <MintySelect value={f.value} onChange={f.onChange} options={f.options} placeholder="Select an option" searchable />
+          {f.error && <div className="field-required">This is a required field</div>}
         </div>
       ))}
     </div>
@@ -783,6 +785,13 @@ export function StepAccountCode({ state, set, next, back, skip, accountOptions, 
   const upd = (k, v) => set({ pettyCash: { ...p, [k]: v } });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [showErrors, setShowErrors] = useState(false);
+
+  const pcAccountRef = useRef(null);
+  const depositAccountRef = useRef(null);
+  const directorCodeRef = useRef(null);
+  const cashSalesCodeRef = useRef(null);
+  const discrepancyCodeRef = useRef(null);
 
   const opts = accountOptions || {};
   const labelsOf = (list) => (list || []).map((o) => o.label);
@@ -798,8 +807,26 @@ export function StepAccountCode({ state, set, next, back, skip, accountOptions, 
     (opts.expense || []).map((e) => [e.code, e.name ? `${e.code} · ${e.name}` : e.code])
   );
 
+  const missingFields = [
+    { key: 'pcAccount', empty: !p.pcAccount, ref: pcAccountRef },
+    { key: 'depositAccount', empty: !p.depositAccount, ref: depositAccountRef },
+    { key: 'directorCode', empty: !p.directorCode, ref: directorCodeRef },
+    { key: 'cashSalesCode', empty: !p.cashSalesCode, ref: cashSalesCodeRef },
+    { key: 'discrepancyCode', empty: !p.discrepancyCode, ref: discrepancyCodeRef },
+  ];
+
   const tryNext = async () => {
     if (saving) return;
+    const firstMissing = missingFields.find((f) => f.empty);
+    if (firstMissing) {
+      setShowErrors(true);
+      requestAnimationFrame(() => {
+        const node = firstMissing.ref.current;
+        if (node) node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      return;
+    }
+    setShowErrors(false);
     if (typeof submitAccountCodes === 'function') {
       setSaveError('');
       setSaving(true);
@@ -834,6 +861,7 @@ export function StepAccountCode({ state, set, next, back, skip, accountOptions, 
 
         <PCSection
           title="Petty Cash Account"
+          cardRef={pcAccountRef}
           fields={[
             {
               label: (
@@ -847,42 +875,49 @@ export function StepAccountCode({ state, set, next, back, skip, accountOptions, 
               value: p.pcAccount || '',
               onChange: (v) => upd('pcAccount', v),
               options: pcBankOptions,
+              error: showErrors && !p.pcAccount,
             },
           ]}
         />
 
         <PCSection
           title="Deposit Bank Account"
+          cardRef={depositAccountRef}
           fields={[
             {
               label: 'Select bank account in Xero for actual bank that your company use to deposit and withdraw cash.',
               value: p.depositAccount || '',
               onChange: (v) => upd('depositAccount', v),
               options: depositBankOptions,
+              error: showErrors && !p.depositAccount,
             },
           ]}
         />
 
         <PCSection
           title="Director Personal Account"
+          cardRef={directorCodeRef}
           fields={[
             {
               label: 'Select account code for the Advance Payment from director',
               value: p.directorCode || '',
               onChange: (v) => upd('directorCode', v),
               options: directorLabels,
+              error: showErrors && !p.directorCode,
             },
           ]}
         />
 
         <PCSection
           title="Cash Sales"
+          cardRef={cashSalesCodeRef}
           fields={[
             {
               label: 'Select account code for cash sales',
               value: p.cashSalesCode || '',
               onChange: (v) => upd('cashSalesCode', v),
               options: cashSaleLabels,
+              error: showErrors && !p.cashSalesCode,
             },
           ]}
         />
@@ -903,12 +938,14 @@ export function StepAccountCode({ state, set, next, back, skip, accountOptions, 
         </div>
         <PCSection
           title="Discrepancy — Other Expense"
+          cardRef={discrepancyCodeRef}
           fields={[
             {
               label: 'Select account code to record Cash Discrepancy',
               value: p.discrepancyCode || '',
               onChange: (v) => upd('discrepancyCode', v),
               options: discrepancyLabels,
+              error: showErrors && !p.discrepancyCode,
             },
           ]}
         />
@@ -934,11 +971,32 @@ export function StepOthers({ state, set, next, back, skip, accountOptions, submi
   const upd = (k, v) => set({ pettyCash: { ...p, [k]: v } });
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [showErrors, setShowErrors] = useState(false);
+
+  const directorContactRef = useRef(null);
+  const cashSaleContactRef = useRef(null);
+  const discrepancyContactRef = useRef(null);
 
   const contactLabels = ((accountOptions || {}).contacts || []).map((c) => c.label);
 
+  const missingFields = [
+    { key: 'directorContact', empty: !p.directorContact, ref: directorContactRef },
+    { key: 'cashSaleContact', empty: !p.cashSaleContact, ref: cashSaleContactRef },
+    { key: 'discrepancyContact', empty: !p.discrepancyContact, ref: discrepancyContactRef },
+  ];
+
   const tryNext = async () => {
     if (saving) return;
+    const firstMissing = missingFields.find((f) => f.empty);
+    if (firstMissing) {
+      setShowErrors(true);
+      requestAnimationFrame(() => {
+        const node = firstMissing.ref.current;
+        if (node) node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      return;
+    }
+    setShowErrors(false);
     if (typeof submitContacts === 'function') {
       setSaveError('');
       setSaving(true);
@@ -962,36 +1020,42 @@ export function StepOthers({ state, set, next, back, skip, accountOptions, submi
       <div className="pc-stack">
         <PCSection
           title="Director&apos;s Contact"
+          cardRef={directorContactRef}
           fields={[
             {
               label: 'Select Director or Responsible person',
               value: p.directorContact || '',
               onChange: (v) => upd('directorContact', v),
               options: contactLabels,
+              error: showErrors && !p.directorContact,
             },
           ]}
         />
 
         <PCSection
           title="Cash Sales Contact"
+          cardRef={cashSaleContactRef}
           fields={[
             {
               label: 'Select the Customer contact for cash sales',
               value: p.cashSaleContact || '',
               onChange: (v) => upd('cashSaleContact', v),
               options: contactLabels,
+              error: showErrors && !p.cashSaleContact,
             },
           ]}
         />
 
         <PCSection
           title="Discrepancy Contact"
+          cardRef={discrepancyContactRef}
           fields={[
             {
               label: 'Select the contact used to record cash discrepancies',
               value: p.discrepancyContact || '',
               onChange: (v) => upd('discrepancyContact', v),
               options: contactLabels,
+              error: showErrors && !p.discrepancyContact,
             },
           ]}
         />

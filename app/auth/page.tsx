@@ -1,0 +1,186 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+
+export default function AuthPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const canContinue = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+  return (
+    <>
+      <div className="topbar" data-screen-label="Top bar">
+        <div className="topbar-inner">
+          <div className="brand">
+            <img className="brand-mark-img" src="/assets/minty-logo.png" alt="Minty" />
+            <span>Minty</span>
+          </div>
+          <h1></h1>
+          <div className="right" />
+        </div>
+      </div>
+
+      <main className="auth-page">
+        <div className="auth-card">
+          <div className="page-head">
+            <h2>Welcome back</h2>
+            <p>Start your journey with us today.</p>
+          </div>
+
+          <div className="form-stack auth-form">
+            <div className="field">
+              <label htmlFor="auth-email">Email</label>
+              <input
+                id="auth-email"
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                placeholder="jane@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-primary btn-block"
+              disabled={!canContinue}
+              onClick={() => router.push("/auth/verify")}
+            >
+              Continue
+            </button>
+
+            <div className="auth-divider" role="separator">
+              <span>or</span>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-ghost btn-block auth-xero"
+              onClick={() => {
+                /* dummy — no Xero handoff wired yet */
+              }}
+            >
+              Log in with Xero
+              <img src="/xero-logo.webp" alt="" className="auth-xero-logo" />
+            </button>
+
+            <p className="auth-foot">
+              Don&apos;t have an account?{" "}
+              <a className="auth-link" href="#" onClick={(e) => e.preventDefault()}>
+                Sign up
+              </a>
+            </p>
+          </div>
+
+          <div className="auth-notice">
+            <span className="auth-notice-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-4z" />
+                <path d="M9 12l2 2 4-4" />
+              </svg>
+            </span>
+            <div className="auth-notice-body">
+              <div className="auth-notice-title">Secure Authentication</div>
+              <p>Your login is protected by industry-standard AES-256 encryption.</p>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <style>{`
+        .auth-page {
+          min-height: calc(100vh - 60px);
+          padding: 24px 16px 48px;
+          display: flex;
+          justify-content: center;
+        }
+        .auth-card {
+          width: 100%;
+          max-width: 380px;
+          display: flex;
+          flex-direction: column;
+          gap: 24px;
+          padding-top: 24px;
+        }
+        /* Tighter than .page-head's default 36px because the email form
+           sits right under the heading rather than across a step page. */
+        .auth-card .page-head { margin-bottom: 0; }
+        /* Override form-stack's 18px gap with a tighter 14px so the
+           Continue button sits closer to the email input, matching the
+           screenshot. Everything else (input padding 14px 16px,
+           label 14px) comes from .form-stack untouched. */
+        .auth-form { gap: 14px; }
+
+        .auth-divider {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          color: var(--muted);
+          font-size: 13px;
+          padding: 2px 0;
+        }
+        .auth-divider::before,
+        .auth-divider::after {
+          content: "";
+          flex: 1;
+          height: 1px;
+          background: var(--line);
+        }
+        .auth-xero {
+          background: var(--bg);
+          color: var(--ink);
+        }
+        .auth-xero-logo {
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          object-fit: cover;
+        }
+        .auth-foot {
+          margin: 4px 0 0;
+          text-align: center;
+          font-size: 14px;
+          color: var(--ink-2);
+        }
+        .auth-link {
+          color: var(--accent-ink);
+          font-weight: 600;
+          text-decoration: underline;
+          text-underline-offset: 2px;
+        }
+        .auth-link:hover {
+          color: var(--accent);
+        }
+        .auth-notice {
+          display: flex;
+          gap: 12px;
+          padding: 14px 16px;
+          border: 1px solid var(--line);
+          border-radius: var(--radius);
+          background: var(--bg);
+        }
+        .auth-notice-icon {
+          color: var(--accent);
+          flex-shrink: 0;
+          padding-top: 2px;
+        }
+        .auth-notice-body {
+          font-size: 13px;
+          line-height: 1.55;
+          color: var(--ink-2);
+        }
+        .auth-notice-title {
+          font-weight: 700;
+          color: var(--ink);
+          margin-bottom: 2px;
+          font-size: 14px;
+        }
+        .auth-notice-body p {
+          margin: 0;
+        }
+      `}</style>
+    </>
+  );
+}

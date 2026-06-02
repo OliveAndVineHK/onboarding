@@ -47,42 +47,42 @@ function readJwtClaims(token) {
 const STEPS = [
   { id: 1, label: 'Basic Information', short: 'Basic Information', tiny: 'Basic' },
   { id: 2, label: 'Select Module', short: 'Select Module', tiny: 'Module' },
-  { id: 3, label: 'Connect to Accounting System', short: 'Connect to Accounting System', tiny: 'Accounting' },
-  { id: 4, label: 'Sales Setting', short: 'Sales Setting', tiny: 'Sales' },
-  { id: 5, label: 'Account Code Setting', short: 'Account Code Setting', tiny: 'Account Code' },
-  { id: 6, label: 'Others', short: 'Others', tiny: 'Others' },
-  { id: 7, label: 'Bill Settings', short: 'Bill Settings', tiny: 'Bill' },
-  { id: 8, label: 'User Invite', short: 'User Invite', tiny: 'Invite' },
+  { id: 3, label: 'User Invite', short: 'User Invite', tiny: 'Invite' },
+  { id: 4, label: 'Connect to Accounting System', short: 'Connect to Accounting System', tiny: 'Accounting' },
+  { id: 5, label: 'Sales Setting', short: 'Sales Setting', tiny: 'Sales' },
+  { id: 6, label: 'Account Code Setting', short: 'Account Code Setting', tiny: 'Account Code' },
+  { id: 7, label: 'Others', short: 'Others', tiny: 'Others' },
+  { id: 8, label: 'Bill Settings', short: 'Bill Settings', tiny: 'Bill' },
   { id: 9, label: 'All Set', short: 'All Set', tiny: 'All Set' },
 ];
 
-// Display-only structure: collapses Sales (4) + Account Code (5) into a single
-// "Petty Cash Settings" segment with sub-items. Petty Cash and Bill segments
-// only appear when their respective modules are selected on step 2.
+// Display-only structure: collapses Sales (5) + Account Code (6) + Others (7)
+// into a single "Petty Cash Settings" segment with sub-items. Petty Cash and
+// Bill segments only appear when their respective modules are selected on step 2.
 function getDisplaySteps(modules) {
   const hasPetty = modules.includes('pettyCash');
   const hasBills = modules.includes('bills');
   const out = [
     { label: 'Basic Information', tiny: 'Basic', ids: [1] },
     { label: 'Select Module', tiny: 'Module', ids: [2] },
-    { label: 'Connect to Accounting System', tiny: 'Accounting', ids: [3] },
+    { label: 'User Invite', tiny: 'Invite', ids: [3] },
+    { label: 'Connect to Accounting System', tiny: 'Accounting', ids: [4] },
   ];
   if (hasPetty) {
     out.push({
       label: 'Petty Cash Settings',
       tiny: 'Petty Cash',
-      ids: [4, 5, 6],
+      ids: [5, 6, 7],
       subs: [
-        { id: 4, label: 'Sales' },
-        { id: 5, label: 'Account Code' },
-        { id: 6, label: 'Others' },
+        { id: 5, label: 'Sales' },
+        { id: 6, label: 'Account Code' },
+        { id: 7, label: 'Others' },
       ],
     });
   }
   if (hasBills) {
-    out.push({ label: 'Bill Settings', tiny: 'Bill', ids: [7] });
+    out.push({ label: 'Bill Settings', tiny: 'Bill', ids: [8] });
   }
-  out.push({ label: 'User Invite', tiny: 'Invite', ids: [8] });
   out.push({ label: 'All Set', tiny: 'All Set', ids: [9] });
   return out.map((d, i) => ({ idx: i + 1, ...d }));
 }
@@ -91,10 +91,10 @@ function getDisplaySteps(modules) {
 function getActiveStepIds(modules) {
   const hasPetty = modules.includes('pettyCash');
   const hasBills = modules.includes('bills');
-  const ids = [1, 2, 3];
-  if (hasPetty) ids.push(4, 5, 6);
-  if (hasBills) ids.push(7);
-  ids.push(8, 9);
+  const ids = [1, 2, 3, 4];
+  if (hasPetty) ids.push(5, 6, 7);
+  if (hasBills) ids.push(8);
+  ids.push(9);
   return ids;
 }
 
@@ -162,13 +162,13 @@ function isStepComplete(id, state) {
     case 2:
       return state.modules.length > 0;
     case 3:
+      return true; // Invite is optional
+    case 4:
       return true; // Accounting is optional
-    case 4: {
+    case 5: {
       const b = state.pettyCash && state.pettyCash.openingBalance;
       return b !== undefined && b !== null && String(b).trim() !== '';
     }
-    case 5:
-      return true;
     case 6:
       return true;
     case 7:
@@ -436,15 +436,15 @@ export default function OnboardingApp() {
               ? { connected: true, org: xeroOrg, lastConnected: today }
               : (resumed.state && resumed.state.xero) || prev.xero,
         }));
-        setMaxReached((m) => Math.max(m, resumed.maxReached || 3, 3));
+        setMaxReached((m) => Math.max(m, resumed.maxReached || 4, 4));
       } else if (xeroParam === 'connected') {
         setState((prev) => ({
           ...prev,
           xero: { connected: true, org: xeroOrg, lastConnected: today },
         }));
       }
-      setCurrent(3);
-      setMaxReached((m) => Math.max(m, 3));
+      setCurrent(4);
+      setMaxReached((m) => Math.max(m, 4));
       // Strip the params so an ordinary refresh doesn't re-trigger the resume.
       try {
         const url = new URL(window.location.href);
@@ -978,21 +978,12 @@ export default function OnboardingApp() {
       <Stepper current={current} onClick={goto} maxReached={maxReached} displaySteps={displaySteps} />
 
       <main className="page" data-screen-label={`0${current} ${STEPS[current - 1].label}`}>
-        {(current === 4 || current === 5 || current === 6) && (
+        {(current === 5 || current === 6 || current === 7) && (
           <aside className="pc-side-menu" aria-label="Petty Cash sub-steps">
             <div className="pc-side-title">Petty Cash Settings</div>
-            <button type="button" className={'pc-side-item' + (current === 4 ? ' active' : '') + (current > 4 ? ' done' : '')} onClick={() => goto(4)}>
-              <span className="substep-circle">{current > 4 && <Icon.CheckSm />}</span>
-              <span className="substep-label">Sales</span>
-            </button>
-            <button
-              type="button"
-              className={'pc-side-item' + (current === 5 ? ' active' : '') + (current > 5 ? ' done' : '')}
-              onClick={() => goto(5)}
-              disabled={5 > maxReached}
-            >
+            <button type="button" className={'pc-side-item' + (current === 5 ? ' active' : '') + (current > 5 ? ' done' : '')} onClick={() => goto(5)}>
               <span className="substep-circle">{current > 5 && <Icon.CheckSm />}</span>
-              <span className="substep-label">Account Code</span>
+              <span className="substep-label">Sales</span>
             </button>
             <button
               type="button"
@@ -1001,18 +992,27 @@ export default function OnboardingApp() {
               disabled={6 > maxReached}
             >
               <span className="substep-circle">{current > 6 && <Icon.CheckSm />}</span>
+              <span className="substep-label">Account Code</span>
+            </button>
+            <button
+              type="button"
+              className={'pc-side-item' + (current === 7 ? ' active' : '') + (current > 7 ? ' done' : '')}
+              onClick={() => goto(7)}
+              disabled={7 > maxReached}
+            >
+              <span className="substep-circle">{current > 7 && <Icon.CheckSm />}</span>
               <span className="substep-label">Others</span>
             </button>
           </aside>
         )}
         {current === 1 && <StepCreateEntity {...stepProps} />}
         {current === 2 && <StepSelectModule {...stepProps} />}
-        {current === 3 && <StepConnectXero {...stepProps} />}
-        {current === 4 && <StepSalesSetting {...stepProps} />}
-        {current === 5 && <StepAccountCode {...stepProps} />}
-        {current === 6 && <StepOthers {...stepProps} />}
-        {current === 7 && <StepBills {...stepProps} />}
-        {current === 8 && <StepInvite {...stepProps} />}
+        {current === 3 && <StepInvite {...stepProps} />}
+        {current === 4 && <StepConnectXero {...stepProps} />}
+        {current === 5 && <StepSalesSetting {...stepProps} />}
+        {current === 6 && <StepAccountCode {...stepProps} />}
+        {current === 7 && <StepOthers {...stepProps} />}
+        {current === 8 && <StepBills {...stepProps} />}
         {current === 9 && <StepAllSet {...stepProps} />}
       </main>
     </>
