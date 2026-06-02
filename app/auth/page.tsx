@@ -1,12 +1,52 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+
+const FLASK_BASE = process.env.NEXT_PUBLIC_FLASK_URL || "http://localhost:5001";
 
 export default function AuthPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const canContinue = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const searchParams = useSearchParams();
+  const inviteToken = searchParams.get("invite") || "";
+  const prefilledEmail = searchParams.get("email") || "";
+  const [email, setEmail] = useState(prefilledEmail);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const canContinue = emailValid && !sending;
+
+  const emailLocked = Boolean(inviteToken && prefilledEmail);
+
+  useEffect(() => {
+    if (prefilledEmail) setEmail(prefilledEmail);
+  }, [prefilledEmail]);
+
+  const onContinue = async () => {
+    if (!emailValid || sending) return;
+    setError("");
+    setSending(true);
+    try {
+      const res = await fetch(`${FLASK_BASE}/auth/email/request-code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.status === "error") {
+        setError(data.message || "Could not send a code. Please try again.");
+        setSending(false);
+        return;
+      }
+      const qs = new URLSearchParams();
+      if (inviteToken) qs.set("invite", inviteToken);
+      qs.set("email", email);
+      router.push(`/auth/confirm?${qs.toString()}`);
+    } catch {
+      setError("Network error — is the Flask server running?");
+      setSending(false);
+    }
+  };
 
   return (
     <>
@@ -39,6 +79,9 @@ export default function AuthPage() {
                 placeholder="jane@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                readOnly={emailLocked}
+                aria-readonly={emailLocked}
+                title={emailLocked ? "This invite was sent to this address" : undefined}
               />
             </div>
 
@@ -46,10 +89,11 @@ export default function AuthPage() {
               type="button"
               className="btn btn-primary btn-block"
               disabled={!canContinue}
-              onClick={() => router.push("/auth/verify")}
+              onClick={onContinue}
             >
-              Continue
+              {sending ? "Sending code…" : "Continue"}
             </button>
+            {error && <div className="auth-error" role="alert">{error}</div>}
 
             <div className="auth-divider" role="separator">
               <span>or</span>
@@ -113,6 +157,12 @@ export default function AuthPage() {
            label 14px) comes from .form-stack untouched. */
         .auth-form { gap: 14px; }
 
+        .auth-error {
+          color: var(--danger);
+          font-size: 13px;
+          text-align: center;
+          margin-top: -6px;
+        }
         .auth-divider {
           display: flex;
           align-items: center;

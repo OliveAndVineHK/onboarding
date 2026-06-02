@@ -1,13 +1,59 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
-const EMAIL_MASKED = "o***********@hk.com";
+const FLASK_BASE = process.env.NEXT_PUBLIC_FLASK_URL || "http://localhost:5001";
+
+const maskEmail = (email: string) => {
+  if (!email || !email.includes("@")) return email || "your email";
+  const [local, domain] = email.split("@");
+  if (local.length <= 1) return email;
+  return `${local[0]}${"*".repeat(Math.max(local.length - 1, 3))}@${domain}`;
+};
 
 export default function ConfirmPage() {
+  const searchParams = useSearchParams();
+  const email = searchParams.get("email") || "";
+  const inviteToken = searchParams.get("invite") || "";
+  const emailDisplay = maskEmail(email);
+
   const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [verifying, setVerifying] = useState(false);
+  const [error, setError] = useState("");
   const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
+
+  const code = digits.join("");
+  const canVerify = code.length === 6 && !verifying;
+
+  const onVerify = async () => {
+    if (!canVerify) return;
+    setError("");
+    setVerifying(true);
+    try {
+      const res = await fetch(`${FLASK_BASE}/auth/email/verify-code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code, invite: inviteToken }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.status === "error") {
+        setError(data.message || "Verification failed.");
+        setVerifying(false);
+        return;
+      }
+      // Flask returns an absolute or relative redirect — both resolve fine.
+      const target =
+        typeof data.redirect_url === "string" && data.redirect_url
+          ? new URL(data.redirect_url, FLASK_BASE).toString()
+          : FLASK_BASE;
+      window.location.href = target;
+    } catch {
+      setError("Network error — is the Flask server running?");
+      setVerifying(false);
+    }
+  };
 
   const setDigit = (i: number, raw: string) => {
     const v = raw.replace(/\D/g, "").slice(-1);
@@ -63,7 +109,7 @@ export default function ConfirmPage() {
             <p>
               We&apos;ve sent a 6-digit code to your email
               <br />
-              <span className="confirm-email">{EMAIL_MASKED}</span>
+              <span className="confirm-email">{emailDisplay}</span>
             </p>
           </div>
 
@@ -91,12 +137,12 @@ export default function ConfirmPage() {
           <button
             type="button"
             className="btn btn-primary btn-block confirm-verify"
-            onClick={() => {
-              /* dummy — no verification wired yet */
-            }}
+            disabled={!canVerify}
+            onClick={onVerify}
           >
-            Verify Now
+            {verifying ? "Verifying…" : "Verify Now"}
           </button>
+          {error && <div className="auth-error" role="alert">{error}</div>}
 
           <p className="confirm-resend">
             Didn&apos;t received the code?{" "}
@@ -200,6 +246,12 @@ export default function ConfirmPage() {
         }
 
         .confirm-verify { margin-top: 16px; }
+        .auth-error {
+          color: var(--danger);
+          font-size: 13px;
+          text-align: center;
+          margin-top: -8px;
+        }
 
         .confirm-resend {
           margin: 4px 0 0;
