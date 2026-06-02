@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 const FLASK_BASE = process.env.NEXT_PUBLIC_FLASK_URL || "http://localhost:5001";
 
-export default function AuthPage() {
+function AuthContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get("invite") || "";
@@ -232,5 +232,31 @@ export default function AuthPage() {
         }
       `}</style>
     </>
+  );
+}
+
+// useSearchParams forces a Suspense boundary at build time. The fallback is
+// the bare topbar so the page header is visible during the (very short)
+// hydration window — searchParams resolve client-side immediately on mount.
+function AuthFallback() {
+  return (
+    <div className="topbar" data-screen-label="Top bar">
+      <div className="topbar-inner">
+        <div className="brand">
+          <img className="brand-mark-img" src="/assets/minty-logo.png" alt="Minty" />
+          <span>Minty</span>
+        </div>
+        <h1></h1>
+        <div className="right" />
+      </div>
+    </div>
+  );
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense fallback={<AuthFallback />}>
+      <AuthContent />
+    </Suspense>
   );
 }

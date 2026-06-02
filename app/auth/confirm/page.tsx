@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 const FLASK_BASE = process.env.NEXT_PUBLIC_FLASK_URL || "http://localhost:5001";
@@ -12,7 +12,7 @@ const maskEmail = (email: string) => {
   return `${local[0]}${"*".repeat(Math.max(local.length - 1, 3))}@${domain}`;
 };
 
-export default function ConfirmPage() {
+function ConfirmContent() {
   const searchParams = useSearchParams();
   const email = searchParams.get("email") || "";
   const inviteToken = searchParams.get("invite") || "";
@@ -280,5 +280,28 @@ export default function ConfirmPage() {
         }
       `}</style>
     </>
+  );
+}
+
+function ConfirmFallback() {
+  return (
+    <div className="topbar" data-screen-label="Top bar">
+      <div className="topbar-inner">
+        <div className="brand">
+          <img className="brand-mark-img" src="/assets/minty-logo.png" alt="Minty" />
+          <span>Minty</span>
+        </div>
+        <h1></h1>
+        <div className="right" />
+      </div>
+    </div>
+  );
+}
+
+export default function ConfirmPage() {
+  return (
+    <Suspense fallback={<ConfirmFallback />}>
+      <ConfirmContent />
+    </Suspense>
   );
 }
