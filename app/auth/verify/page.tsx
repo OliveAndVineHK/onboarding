@@ -1,15 +1,73 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
-const INITIAL_CODE = ["4", "8", "2", "9", "1", "0"];
+const FLASK_BASE = process.env.NEXT_PUBLIC_FLASK_URL || "http://localhost:5001";
 
-export default function VerifyPage() {
-  const router = useRouter();
-  const [digits, setDigits] = useState<string[]>(INITIAL_CODE);
+function VerifyContent() {
+  const searchParams = useSearchParams();
+  const email = searchParams.get("email") || "";
+  const inviteToken = searchParams.get("invite") || "";
+
+  const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [verifying, setVerifying] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [error, setError] = useState("");
   const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
+
+  const code = digits.join("");
+  const canVerify = code.length === 6 && !verifying;
+
+  const onVerify = async () => {
+    if (!canVerify) return;
+    setError("");
+    setVerifying(true);
+    try {
+      const res = await fetch(`${FLASK_BASE}/auth/email/verify-code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code, invite: inviteToken }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.status === "error") {
+        setError(data.message || "Verification failed.");
+        setVerifying(false);
+        return;
+      }
+      const target =
+        typeof data.redirect_url === "string" && data.redirect_url
+          ? new URL(data.redirect_url, FLASK_BASE).toString()
+          : FLASK_BASE;
+      window.location.href = target;
+    } catch {
+      setError("Network error — is the Flask server running?");
+      setVerifying(false);
+    }
+  };
+
+  const onResend = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (resending || !email) return;
+    setError("");
+    setResending(true);
+    try {
+      const res = await fetch(`${FLASK_BASE}/auth/email/request-code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.status === "error") {
+        setError(data.message || "Could not resend code.");
+      }
+    } catch {
+      setError("Network error — is the Flask server running?");
+    } finally {
+      setResending(false);
+    }
+  };
 
   const setDigit = (i: number, raw: string) => {
     const v = raw.replace(/\D/g, "").slice(-1);
@@ -74,15 +132,37 @@ export default function VerifyPage() {
                 />
               ))}
             </div>
-            <div className="otp-expires">Expires 10 minutes</div>
+            <div className="otp-expires">Expires 3 minutes</div>
           </div>
 
           <button
             type="button"
             className="btn btn-primary btn-block"
-            onClick={() => router.push("/auth/confirm")}
+            disabled={!canVerify}
+            onClick={onVerify}
           >
-            Verify Now
+            {verifying ? "Verifying…" : "Verify Now"}
+          </button>
+          {error && <div className="auth-error" role="alert">{error}</div>}
+
+          <p className="confirm-resend">
+            Didn&apos;t receive the code?{" "}
+            <a className="auth-link" href="#" onClick={onResend}>
+              {resending ? "Resending…" : "Resend Code"}
+            </a>
+          </p>
+
+          <div className="auth-divider" role="separator">
+            <span>or</span>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-ghost btn-block auth-xero"
+            onClick={() => { window.location.href = `${FLASK_BASE}/xero_auth`; }}
+          >
+            Log in with Xero
+            <img src="/xero-logo.webp" alt="" className="auth-xero-logo" />
           </button>
 
           <div className="auth-notice security-alert">
@@ -95,8 +175,7 @@ export default function VerifyPage() {
             <div className="auth-notice-body">
               <div className="auth-notice-title">Security Alert</div>
               <p>
-                This code was requested from a new device in Hongkong. If this
-                wasn&apos;t you, please secure your account immediately.
+                If you didn&apos;t request this code, you can safely ignore this message.
               </p>
             </div>
           </div>
@@ -120,7 +199,6 @@ export default function VerifyPage() {
         }
         .auth-card .page-head { margin-bottom: 0; }
 
-        /* OTP card — #46D8CC at 10% opacity, monospace label + expiry */
         .otp-card {
           background: rgba(70, 216, 204, 0.1);
           border: 1px solid color-mix(in oklab, var(--accent) 18%, var(--line));
@@ -142,8 +220,6 @@ export default function VerifyPage() {
           align-items: center;
           gap: 8px;
         }
-        /* Extra gap between the 3rd and 4th cell — matches the
-           "482  910" split in the screenshot without needing a spacer node. */
         .otp-cell:nth-child(4) { margin-left: 12px; }
         .otp-cell {
           width: 40px;
@@ -172,9 +248,54 @@ export default function VerifyPage() {
           color: var(--muted);
           margin-top: 2px;
         }
-
-        /* Notice card — neutral by default, .security-alert variant uses
-           the accent-soft tint to match the screenshot. */
+        .auth-error {
+          color: var(--danger);
+          font-size: 13px;
+          text-align: center;
+          margin-top: -8px;
+        }
+        .auth-divider {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          color: var(--muted);
+          font-size: 13px;
+          padding: 2px 0;
+        }
+        .auth-divider::before,
+        .auth-divider::after {
+          content: "";
+          flex: 1;
+          height: 1px;
+          background: var(--line);
+        }
+        .auth-xero {
+          background: var(--bg);
+          color: var(--ink);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+        }
+        .auth-xero-logo {
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          object-fit: cover;
+        }
+        .confirm-resend {
+          margin: 4px 0 0;
+          text-align: center;
+          font-size: 14px;
+          color: var(--muted);
+        }
+        .auth-link {
+          color: var(--accent-ink);
+          font-weight: 600;
+          text-decoration: underline;
+          text-underline-offset: 2px;
+        }
+        .auth-link:hover { color: var(--accent); }
         .auth-notice {
           display: flex;
           gap: 12px;
@@ -209,5 +330,28 @@ export default function VerifyPage() {
         }
       `}</style>
     </>
+  );
+}
+
+function VerifyFallback() {
+  return (
+    <div className="topbar" data-screen-label="Top bar">
+      <div className="topbar-inner">
+        <div className="brand">
+          <img className="brand-mark-img" src="/assets/minty-logo.png" alt="Minty" />
+          <span>Minty</span>
+        </div>
+        <h1></h1>
+        <div className="right" />
+      </div>
+    </div>
+  );
+}
+
+export default function VerifyPage() {
+  return (
+    <Suspense fallback={<VerifyFallback />}>
+      <VerifyContent />
+    </Suspense>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 const FLASK_BASE = process.env.NEXT_PUBLIC_FLASK_URL || "http://localhost:5001";
@@ -21,11 +21,46 @@ function ConfirmContent() {
   const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [verifying, setVerifying] = useState(false);
+  const [resending, setResending] = useState(false);
   const [error, setError] = useState("");
+  const [attempts, setAttempts] = useState(0);
+  const [resendCooldown, setResendCooldown] = useState(60);
   const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
 
   const code = digits.join("");
   const canVerify = code.length === 6 && !verifying;
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setTimeout(() => setResendCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCooldown]);
+
+  const onResend = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (resending || !email || resendCooldown > 0) return;
+    setError("");
+    setResending(true);
+    try {
+      const res = await fetch(`${FLASK_BASE}/auth/email/request-code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.status === "error") {
+        setError(data.message || "Could not resend code.");
+      } else {
+        setResendCooldown(60);
+        setAttempts(0);
+        setDigits(["", "", "", "", "", ""]);
+      }
+    } catch {
+      setError("Network error — is the Flask server running?");
+    } finally {
+      setResending(false);
+    }
+  };
 
   const onVerify = async () => {
     if (!canVerify) return;
@@ -40,6 +75,7 @@ function ConfirmContent() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.status === "error") {
         setError(data.message || "Verification failed.");
+        setAttempts((a) => a + 1);
         setVerifying(false);
         return;
       }
@@ -143,12 +179,19 @@ function ConfirmContent() {
             {verifying ? "Verifying…" : "Verify Now"}
           </button>
           {error && <div className="auth-error" role="alert">{error}</div>}
+          {attempts > 0 && (
+            <div className="auth-attempts">{attempts} / 5 attempts used</div>
+          )}
 
           <p className="confirm-resend">
-            Didn&apos;t received the code?{" "}
-            <a className="auth-link" href="#" onClick={(e) => e.preventDefault()}>
-              Resend Code
-            </a>
+            Didn&apos;t receive the code?{" "}
+            {resendCooldown > 0 ? (
+              <span className="resend-cooldown">Resend in {resendCooldown}s</span>
+            ) : (
+              <a className="auth-link" href="#" onClick={onResend}>
+                {resending ? "Resending…" : "Resend Code"}
+              </a>
+            )}
           </p>
         </div>
 
@@ -253,6 +296,16 @@ function ConfirmContent() {
           margin-top: -8px;
         }
 
+        .auth-attempts {
+          font-size: 13px;
+          text-align: center;
+          color: var(--danger);
+          margin-top: -8px;
+        }
+        .resend-cooldown {
+          color: var(--danger);
+          font-size: 14px;
+        }
         .confirm-resend {
           margin: 4px 0 0;
           text-align: center;
@@ -260,12 +313,12 @@ function ConfirmContent() {
           color: var(--muted);
         }
         .auth-link {
-          color: var(--accent-ink);
+          color: var(--danger);
           font-weight: 600;
           text-decoration: underline;
           text-underline-offset: 2px;
         }
-        .auth-link:hover { color: var(--accent); }
+        .auth-link:hover { color: var(--danger); }
 
         /* Bottom encrypted-channel footer */
         .confirm-footer {
