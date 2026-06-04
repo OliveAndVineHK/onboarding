@@ -29,6 +29,12 @@ export default function NavMenu({ companyName = 'Minty', companyAbbreviation, sh
   const [portalReady, setPortalReady] = useState(false);
   const panelId = useId();
 
+  const handleLogout = () => {
+    setOpen(false);
+    const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
+    window.location.href = `${base}/logout`;
+  };
+
   const abbr = !showFullMenu
     ? '---'
     : companyAbbreviation ||
@@ -140,7 +146,7 @@ export default function NavMenu({ companyName = 'Minty', companyAbbreviation, sh
                     Settings
                   </button>
                 )}
-                <button type="button" onClick={() => setOpen(false)} className={itemClass}>
+                <button type="button" onClick={handleLogout} className={itemClass}>
                   <span className="material-symbols-outlined shrink-0 text-[22px] leading-none text-primary" aria-hidden>
                     logout
                   </span>
