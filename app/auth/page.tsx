@@ -91,7 +91,7 @@ function AuthContent() {
               disabled={!canContinue}
               onClick={onContinue}
             >
-              {sending ? "Sending code…" : "Continue"}
+              {sending ? "Sending code…" : "Log in with OTP"}
             </button>
             {error && <div className="auth-error" role="alert">{error}</div>}
 
