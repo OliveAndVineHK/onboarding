@@ -4,7 +4,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 const FLASK_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
-const CODE_TTL_SECONDS = 60;
+const RESEND_COOLDOWN_SECONDS = 60;
 const MAX_ATTEMPTS = 5;
 
 const maskEmail = (email: string) => {
@@ -24,24 +24,22 @@ function ConfirmContent() {
   const [activeIdx, setActiveIdx] = useState(0);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState("");
-  const [secondsLeft, setSecondsLeft] = useState(CODE_TTL_SECONDS);
   const [attemptsLeft, setAttemptsLeft] = useState(MAX_ATTEMPTS);
   const [resending, setResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
 
   const code = digits.join("");
-  const codeExpired = secondsLeft === 0;
   const noAttempts = attemptsLeft === 0;
-  const mustResend = codeExpired || noAttempts;
-  const canVerify =
-    code.length === 6 && !verifying && !mustResend;
+  const canVerify = code.length === 6 && !verifying && !noAttempts;
+  const canResend = !resending && resendCooldown === 0;
 
-  // Countdown — ticks once per second until 0, then stops.
+  // Resend cooldown — ticks down to 0 once Resend Code has been triggered.
   useEffect(() => {
-    if (secondsLeft <= 0) return;
-    const id = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
+    if (resendCooldown <= 0) return;
+    const id = setTimeout(() => setResendCooldown((s: number) => s - 1), 1000);
     return () => clearTimeout(id);
-  }, [secondsLeft]);
+  }, [resendCooldown]);
 
   const onVerify = async () => {
     if (!canVerify) return;
@@ -76,7 +74,7 @@ function ConfirmContent() {
   };
 
   const onResend = async () => {
-    if (resending) return;
+    if (!canResend) return;
     setError("");
     setResending(true);
     try {
@@ -91,11 +89,12 @@ function ConfirmContent() {
         setResending(false);
         return;
       }
-      // Fresh code: clear the cells, restart the timer, refill attempts.
+      // Fresh code: clear the cells, refill attempts, kick off the cooldown
+      // so Resend can't be spammed.
       setDigits(["", "", "", "", "", ""]);
       setActiveIdx(0);
-      setSecondsLeft(CODE_TTL_SECONDS);
       setAttemptsLeft(MAX_ATTEMPTS);
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
       setResending(false);
       inputsRef.current[0]?.focus();
     } catch {
@@ -193,22 +192,11 @@ function ConfirmContent() {
           </button>
           {error && <div className="auth-error" role="alert">{error}</div>}
 
-          <div className="confirm-status" aria-live="polite">
-            {codeExpired ? (
-              <span className="confirm-status-warn">Code expired — please resend.</span>
-            ) : noAttempts ? (
+          {noAttempts && (
+            <div className="confirm-status" aria-live="polite">
               <span className="confirm-status-warn">No attempts left — please resend the code.</span>
-            ) : (
-              <>
-                Code expires in{" "}
-                <span className="confirm-status-time">
-                  {`0:${String(secondsLeft).padStart(2, "0")}`}
-                </span>
-                {" · "}
-                {attemptsLeft} attempt{attemptsLeft === 1 ? "" : "s"} left
-              </>
-            )}
-          </div>
+            </div>
+          )}
 
           <p className="confirm-resend">
             Didn&apos;t received the code?{" "}
@@ -219,10 +207,14 @@ function ConfirmContent() {
                 e.preventDefault();
                 onResend();
               }}
-              aria-disabled={resending}
-              style={resending ? { opacity: 0.55, pointerEvents: "none" } : undefined}
+              aria-disabled={!canResend}
+              style={!canResend ? { opacity: 0.55, pointerEvents: "none" } : undefined}
             >
-              {resending ? "Sending…" : "Resend Code"}
+              {resending
+                ? "Sending…"
+                : resendCooldown > 0
+                ? `Resend in 0:${String(resendCooldown).padStart(2, "0")}`
+                : "Resend Code"}
             </a>
           </p>
         </div>

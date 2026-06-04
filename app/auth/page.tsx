@@ -103,9 +103,10 @@ function AuthContent() {
               type="button"
               className="btn btn-ghost btn-block auth-xero"
               onClick={() => {
-                // Full-page navigation — Xero OAuth requires a top-level
-                // redirect, not a fetch. Flask's /xero_auth bounces the user
-                // to identity.xero.com, then back to /callback to log them in.
+                // Top-level navigation — Xero OAuth requires a cross-origin
+                // redirect, not a fetch. Flask's /callback handler now sends
+                // an OTP and bounces back to /auth/confirm after the OAuth
+                // round-trip succeeds.
                 window.location.href = `${FLASK_BASE}/xero_auth`;
               }}
             >
