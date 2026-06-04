@@ -99,13 +99,16 @@ function AuthContent() {
               <span>or</span>
             </div>
 
-            <a
-              href={`${FLASK_BASE}/xero_auth`}
+            <button
+              type="button"
               className="btn btn-ghost btn-block auth-xero"
+              onClick={() => {
+                /* dummy — no Xero handoff wired yet */
+              }}
             >
               Log in with Xero
               <img src="/xero-logo.webp" alt="" className="auth-xero-logo" />
-            </a>
+            </button>
 
             <p className="auth-foot">
               Don&apos;t have an account?{" "}
