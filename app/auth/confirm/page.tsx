@@ -3,7 +3,7 @@
 import { Suspense, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-const FLASK_BASE = process.env.NEXT_PUBLIC_FLASK_URL || "http://localhost:5001";
+const FLASK_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
 
 const maskEmail = (email: string) => {
   if (!email || !email.includes("@")) return email || "your email";

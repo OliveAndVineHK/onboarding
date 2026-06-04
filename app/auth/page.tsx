@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-const FLASK_BASE = process.env.NEXT_PUBLIC_FLASK_URL || "http://localhost:5001";
+const FLASK_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
 
 function AuthContent() {
   const router = useRouter();
