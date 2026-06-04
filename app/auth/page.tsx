@@ -10,6 +10,8 @@ function AuthContent() {
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get("invite") || "";
   const prefilledEmail = searchParams.get("email") || "";
+  const firstName = searchParams.get("fn") || "";
+  const lastName = searchParams.get("ln") || "";
   const [email, setEmail] = useState(prefilledEmail);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
@@ -41,6 +43,8 @@ function AuthContent() {
       const qs = new URLSearchParams();
       if (inviteToken) qs.set("invite", inviteToken);
       qs.set("email", email);
+      if (firstName) qs.set("fn", firstName);
+      if (lastName) qs.set("ln", lastName);
       router.push(`/auth/confirm?${qs.toString()}`);
     } catch {
       setError("Network error — is the Flask server running?");

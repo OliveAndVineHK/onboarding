@@ -18,6 +18,8 @@ function ConfirmContent() {
   const searchParams = useSearchParams();
   const email = searchParams.get("email") || "";
   const inviteToken = searchParams.get("invite") || "";
+  const firstName = searchParams.get("fn") || "";
+  const lastName = searchParams.get("ln") || "";
   const emailDisplay = maskEmail(email);
 
   const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
@@ -49,7 +51,13 @@ function ConfirmContent() {
       const res = await fetch(`${FLASK_BASE}/auth/email/verify-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code, invite: inviteToken }),
+        body: JSON.stringify({
+          email,
+          code,
+          invite: inviteToken,
+          first_name: firstName,
+          last_name: lastName,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.status === "error") {
