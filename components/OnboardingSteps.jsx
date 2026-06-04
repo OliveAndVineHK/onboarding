@@ -779,10 +779,6 @@ export function StepSalesSetting({ state, set, next, back, skip, submitSalesMeth
               value={p.openingDate || ''}
               onChange={(v) => upd('openingDate', v)}
               placeholder="Select a date"
-              minDate={(() => {
-                const d = new Date();
-                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-              })()}
             />
           </div>
           <div className={'pc-field' + (showBalanceError && balanceEmpty ? ' field-error' : '')}>
