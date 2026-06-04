@@ -1,9 +1,11 @@
 "use client";
 
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 const FLASK_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
+const CODE_TTL_SECONDS = 60;
+const MAX_ATTEMPTS = 5;
 
 const maskEmail = (email: string) => {
   if (!email || !email.includes("@")) return email || "your email";
@@ -22,10 +24,24 @@ function ConfirmContent() {
   const [activeIdx, setActiveIdx] = useState(0);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState("");
+  const [secondsLeft, setSecondsLeft] = useState(CODE_TTL_SECONDS);
+  const [attemptsLeft, setAttemptsLeft] = useState(MAX_ATTEMPTS);
+  const [resending, setResending] = useState(false);
   const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
 
   const code = digits.join("");
-  const canVerify = code.length === 6 && !verifying;
+  const codeExpired = secondsLeft === 0;
+  const noAttempts = attemptsLeft === 0;
+  const mustResend = codeExpired || noAttempts;
+  const canVerify =
+    code.length === 6 && !verifying && !mustResend;
+
+  // Countdown — ticks once per second until 0, then stops.
+  useEffect(() => {
+    if (secondsLeft <= 0) return;
+    const id = setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [secondsLeft]);
 
   const onVerify = async () => {
     if (!canVerify) return;
@@ -39,6 +55,10 @@ function ConfirmContent() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.status === "error") {
+        // Decrement client-side attempts on any server-acknowledged failure.
+        // Network errors (catch branch) don't count — the user never actually
+        // submitted a wrong code in that case.
+        setAttemptsLeft((a) => Math.max(0, a - 1));
         setError(data.message || "Verification failed.");
         setVerifying(false);
         return;
@@ -52,6 +72,35 @@ function ConfirmContent() {
     } catch {
       setError("Network error — is the Flask server running?");
       setVerifying(false);
+    }
+  };
+
+  const onResend = async () => {
+    if (resending) return;
+    setError("");
+    setResending(true);
+    try {
+      const res = await fetch(`${FLASK_BASE}/auth/email/request-code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.status === "error") {
+        setError(data.message || "Could not resend the code. Please try again.");
+        setResending(false);
+        return;
+      }
+      // Fresh code: clear the cells, restart the timer, refill attempts.
+      setDigits(["", "", "", "", "", ""]);
+      setActiveIdx(0);
+      setSecondsLeft(CODE_TTL_SECONDS);
+      setAttemptsLeft(MAX_ATTEMPTS);
+      setResending(false);
+      inputsRef.current[0]?.focus();
+    } catch {
+      setError("Network error — is the Flask server running?");
+      setResending(false);
     }
   };
 
@@ -144,10 +193,36 @@ function ConfirmContent() {
           </button>
           {error && <div className="auth-error" role="alert">{error}</div>}
 
+          <div className="confirm-status" aria-live="polite">
+            {codeExpired ? (
+              <span className="confirm-status-warn">Code expired — please resend.</span>
+            ) : noAttempts ? (
+              <span className="confirm-status-warn">No attempts left — please resend the code.</span>
+            ) : (
+              <>
+                Code expires in{" "}
+                <span className="confirm-status-time">
+                  {`0:${String(secondsLeft).padStart(2, "0")}`}
+                </span>
+                {" · "}
+                {attemptsLeft} attempt{attemptsLeft === 1 ? "" : "s"} left
+              </>
+            )}
+          </div>
+
           <p className="confirm-resend">
             Didn&apos;t received the code?{" "}
-            <a className="auth-link" href="#" onClick={(e) => e.preventDefault()}>
-              Resend Code
+            <a
+              className="auth-link"
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                onResend();
+              }}
+              aria-disabled={resending}
+              style={resending ? { opacity: 0.55, pointerEvents: "none" } : undefined}
+            >
+              {resending ? "Sending…" : "Resend Code"}
             </a>
           </p>
         </div>
@@ -251,6 +326,23 @@ function ConfirmContent() {
           font-size: 13px;
           text-align: center;
           margin-top: -8px;
+        }
+
+        .confirm-status {
+          margin-top: -6px;
+          font-size: 13px;
+          color: var(--muted);
+          text-align: center;
+          font-variant-numeric: tabular-nums;
+        }
+        .confirm-status-time {
+          color: var(--ink);
+          font-weight: 600;
+          font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+        .confirm-status-warn {
+          color: var(--danger);
+          font-weight: 600;
         }
 
         .confirm-resend {

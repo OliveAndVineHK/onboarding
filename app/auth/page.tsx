@@ -64,7 +64,7 @@ function AuthContent() {
       <main className="auth-page">
         <div className="auth-card">
           <div className="page-head">
-            <h2>Welcome back</h2>
+            <h2>Welcome</h2>
             <p>Start your journey with us today.</p>
           </div>
 
@@ -103,7 +103,10 @@ function AuthContent() {
               type="button"
               className="btn btn-ghost btn-block auth-xero"
               onClick={() => {
-                /* dummy — no Xero handoff wired yet */
+                // Full-page navigation — Xero OAuth requires a top-level
+                // redirect, not a fetch. Flask's /xero_auth bounces the user
+                // to identity.xero.com, then back to /callback to log them in.
+                window.location.href = `${FLASK_BASE}/xero_auth`;
               }}
             >
               Log in with Xero
@@ -112,7 +115,12 @@ function AuthContent() {
 
             <p className="auth-foot">
               Don&apos;t have an account?{" "}
-              <a className="auth-link" href="#" onClick={(e) => e.preventDefault()}>
+              <a
+                className="auth-link"
+                href="https://www.xero.com/signup/"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 Sign up
               </a>
             </p>
