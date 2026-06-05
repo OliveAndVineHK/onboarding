@@ -10,13 +10,19 @@ function AuthContent() {
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get("invite") || "";
   const prefilledEmail = searchParams.get("email") || "";
-  const firstName = searchParams.get("fn") || "";
-  const lastName = searchParams.get("ln") || "";
+  const signupMode = searchParams.get("mode") === "signup";
+  const prefilledFirstName = searchParams.get("fn") || "";
+  const prefilledLastName = searchParams.get("ln") || "";
   const [email, setEmail] = useState(prefilledEmail);
+  // Self-serve signup collects the name up front (the User model requires a
+  // first/last name). In login/invite mode these stay as the prefilled values.
+  const [firstName, setFirstName] = useState(prefilledFirstName);
+  const [lastName, setLastName] = useState(prefilledLastName);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const canContinue = emailValid && !sending;
+  const namesValid = !signupMode || (firstName.trim() !== "" && lastName.trim() !== "");
+  const canContinue = emailValid && namesValid && !sending;
 
   const emailLocked = Boolean(inviteToken && prefilledEmail);
 
@@ -68,11 +74,42 @@ function AuthContent() {
       <main className="auth-page">
         <div className="auth-card">
           <div className="page-head">
-            <h2>Welcome</h2>
-            <p>Start your journey with us today.</p>
+            <h2>{signupMode ? "Create your account" : "Welcome"}</h2>
+            <p>
+              {signupMode
+                ? "Sign up with your email to get started."
+                : "Start your journey with us today."}
+            </p>
           </div>
 
           <div className="form-stack auth-form">
+            {signupMode && (
+              <>
+                <div className="field">
+                  <label htmlFor="auth-first-name">First name</label>
+                  <input
+                    id="auth-first-name"
+                    type="text"
+                    autoComplete="given-name"
+                    placeholder="Jane"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                  />
+                </div>
+                <div className="field">
+                  <label htmlFor="auth-last-name">Last name</label>
+                  <input
+                    id="auth-last-name"
+                    type="text"
+                    autoComplete="family-name"
+                    placeholder="Doe"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
+
             <div className="field">
               <label htmlFor="auth-email">Email</label>
               <input
@@ -95,7 +132,11 @@ function AuthContent() {
               disabled={!canContinue}
               onClick={onContinue}
             >
-              {sending ? "Sending code…" : "Log in with OTP"}
+              {sending
+                ? "Sending code…"
+                : signupMode
+                ? "Continue with Email"
+                : "Log in with OTP"}
             </button>
             {error && <div className="auth-error" role="alert">{error}</div>}
 
