@@ -557,23 +557,19 @@ export default function OnboardingApp() {
     }
   };
 
-  // Persist the Step 2 module choice. Maps FE ids (pettyCash, bills) → backend
-  // codes (PETTY_CASH, BILL) and POSTs to /api/onboarding/modules, which
-  // upserts both rows in entity_function_map (selected on, the other off).
-  // Standalone (no Module 1 handoff) is a no-op so the prototype still runs.
+  const FE_TO_BACKEND_MODULE = { pettyCash: 'PETTY_CASH', bills: 'BILL' };
   const submitModule = async () => {
     if (!token || !state.entity.id) return { ok: true };
-    const sel = state.modules[0];
-    if (!sel) return { ok: false, error: 'Pick a module first.' };
-    const moduleCode =
-      sel === 'pettyCash' ? 'PETTY_CASH' : sel === 'bills' ? 'BILL' : '';
-    if (!moduleCode) return { ok: false, error: 'Unknown module.' };
+    const moduleCodes = (state.modules || [])
+      .map((id) => FE_TO_BACKEND_MODULE[id])
+      .filter(Boolean);
+    if (moduleCodes.length === 0) return { ok: false, error: 'Pick at least one module.' };
     const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
     try {
       const res = await fetch(`${base}/api/onboarding/modules`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ entity_id: state.entity.id, module: moduleCode }),
+        body: JSON.stringify({ entity_id: state.entity.id, modules: moduleCodes }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) return { ok: false, error: data.error || 'Failed to save module selection. Please try again.' };
@@ -886,6 +882,16 @@ export default function OnboardingApp() {
       if (!result?.ok) return result;
     }
     const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
+    // Clear the mid-onboarding flag so the entity routes to its dashboard
+    // on the next entity-list click instead of bouncing back here.
+    // Best-effort — even if it fails we still navigate the user out.
+    try {
+      await fetch(`${base}/api/onboarding/finalize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ entity_id: state.entity.id }),
+      });
+    } catch { /* ignore */ }
     const dest = chosen === 'bills'
       ? `${base}/entity/${state.entity.id}/bills`
       : `${base}/entity/${state.entity.id}`;
@@ -893,31 +899,19 @@ export default function OnboardingApp() {
     return { ok: true, redirect: true };
   };
 
-  const salesLoadedRef = useRef(false);
-  useEffect(() => {
-    if (current !== 4 || salesLoadedRef.current) return;
-    if (!token || !state.entity.id) return;
-    salesLoadedRef.current = true;
+  const fetchExistingSalesMethods = async () => {
+    if (!token || !state.entity.id) return null;
     const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
-    fetch(`${base}/api/onboarding/sales-methods?entity_id=${encodeURIComponent(state.entity.id)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!data) return;
-        setState((prev) => ({
-          ...prev,
-          pettyCash: {
-            ...prev.pettyCash,
-            electronicMethods: Array.isArray(data.electronic) ? data.electronic : prev.pettyCash.electronicMethods,
-            deliveryMethods: Array.isArray(data.delivery) ? data.delivery : prev.pettyCash.deliveryMethods,
-          },
-        }));
-      })
-      .catch(() => {
-        /* keep local defaults if the fetch fails */
+    try {
+      const res = await fetch(`${base}/api/onboarding/sales-methods?entity_id=${encodeURIComponent(state.entity.id)}`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-  }, [current, token, state.entity.id]);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  };
 
   // Avatar initials — prefer the connected user, fall back to entity name.
   const profileInitials = (() => {
@@ -946,7 +940,7 @@ export default function OnboardingApp() {
     r.style.setProperty('--accent-hover', ACCENT_DEFAULTS.accent);
   }, []);
 
-  const stepProps = { state, set, next, back, skip, restart, submitEntity, submitModule, connectXero, submitSalesMethods, accountOptions, submitAccountCodes, submitContacts, submitBills, submitInvite, cancelInvite, finishOnboarding };
+  const stepProps = { state, set, next, back, skip, restart, submitEntity, submitModule, connectXero, submitSalesMethods, fetchExistingSalesMethods, accountOptions, submitAccountCodes, submitContacts, submitBills, submitInvite, cancelInvite, finishOnboarding };
 
   return (
     <>
@@ -981,28 +975,18 @@ export default function OnboardingApp() {
         {(current === 5 || current === 6 || current === 7) && (
           <aside className="pc-side-menu" aria-label="Petty Cash sub-steps">
             <div className="pc-side-title">Petty Cash Settings</div>
-            <button type="button" className={'pc-side-item' + (current === 5 ? ' active' : '') + (current > 5 ? ' done' : '')} onClick={() => goto(5)}>
-              <span className="substep-circle">{current > 5 && <Icon.CheckSm />}</span>
+            <div className={'pc-side-item' + (current === 5 ? ' active' : '') + (current > 5 ? ' done' : '')}>
+              <span className="substep-circle">{current > 5 ? <Icon.CheckSm /> : '1'}</span>
               <span className="substep-label">Sales</span>
-            </button>
-            <button
-              type="button"
-              className={'pc-side-item' + (current === 6 ? ' active' : '') + (current > 6 ? ' done' : '')}
-              onClick={() => goto(6)}
-              disabled={6 > maxReached}
-            >
-              <span className="substep-circle">{current > 6 && <Icon.CheckSm />}</span>
+            </div>
+            <div className={'pc-side-item' + (current === 6 ? ' active' : '') + (current > 6 ? ' done' : '')}>
+              <span className="substep-circle">{current > 6 ? <Icon.CheckSm /> : '2'}</span>
               <span className="substep-label">Account Code</span>
-            </button>
-            <button
-              type="button"
-              className={'pc-side-item' + (current === 7 ? ' active' : '') + (current > 7 ? ' done' : '')}
-              onClick={() => goto(7)}
-              disabled={7 > maxReached}
-            >
-              <span className="substep-circle">{current > 7 && <Icon.CheckSm />}</span>
+            </div>
+            <div className={'pc-side-item' + (current === 7 ? ' active' : '') + (current > 7 ? ' done' : '')}>
+              <span className="substep-circle">{current > 7 ? <Icon.CheckSm /> : '3'}</span>
               <span className="substep-label">Others</span>
-            </button>
+            </div>
           </aside>
         )}
         {current === 1 && <StepCreateEntity {...stepProps} />}

@@ -256,7 +256,10 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    color: #fff;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
     flex-shrink: 0;
     transition: background .2s ease, border-color .2s ease, transform .15s ease;
   }
@@ -264,6 +267,7 @@
   .substep.done .substep-circle {
     background: linear-gradient(135deg, #00CBC6 0%, #00D5BF 100%);
     border-color: transparent;
+    color: #fff;
     box-shadow: 0 2px 6px rgba(0, 203, 198, 0.35);
   }
 
@@ -309,13 +313,11 @@
     font-family: inherit;
     font-size: 14px;
     font-weight: 600;
-    cursor: pointer;
     text-align: left;
     width: 100%;
+    user-select: none;
     transition: background .15s ease, border-color .15s ease, color .15s ease;
   }
-  .pc-side-item:hover:not(:disabled) { border-color: var(--accent); color: var(--ink); }
-  .pc-side-item:disabled { cursor: not-allowed; opacity: 0.55; }
   .pc-side-item.active {
     background: #46D8CC;
     border-color: transparent;
@@ -327,6 +329,7 @@
   .pc-side-item.done .substep-circle {
     background: linear-gradient(135deg, #00CBC6 0%, #00D5BF 100%);
     border-color: transparent;
+    color: #fff;
     box-shadow: 0 2px 6px rgba(0, 203, 198, 0.35);
   }
   @media (max-width: 1180px) {

@@ -139,6 +139,41 @@ function AuthContent() {
                 : "Log in with OTP"}
             </button>
             {error && <div className="auth-error" role="alert">{error}</div>}
+
+            <div className="auth-divider" role="separator">
+              <span>or</span>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-ghost btn-block auth-xero"
+              onClick={() => {
+                /* dummy — no Xero handoff wired yet */
+              }}
+            >
+              Log in with Xero
+              <img src="/xero-logo.webp" alt="" className="auth-xero-logo" />
+            </button>
+
+            <p className="auth-foot">
+              Don&apos;t have an account?{" "}
+              <a className="auth-link" href="#" onClick={(e) => e.preventDefault()}>
+                Sign up
+              </a>
+            </p>
+          </div>
+
+          <div className="auth-notice">
+            <span className="auth-notice-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6l8-4z" />
+                <path d="M9 12l2 2 4-4" />
+              </svg>
+            </span>
+            <div className="auth-notice-body">
+              <div className="auth-notice-title">Secure Authentication</div>
+              <p>Your login is protected by industry-standard AES-256 encryption.</p>
+            </div>
           </div>
         </div>
       </main>

@@ -69,7 +69,7 @@ export function StepCreateEntity({ state, set, next, skip, submitEntity }) {
           <input type="text" name="organization" autoComplete="organization" placeholder="Please enter your company name" value={s.name} onChange={(e) => upd('name', e.target.value)} />
         </div>
         <div className="field">
-          <label>Country Code</label>
+          <label>Country</label>
           <MintySelect value={s.country} onChange={(v) => upd('country', v)} options={COUNTRY_OPTIONS} searchable />
         </div>
         <div className="field">
@@ -154,15 +154,15 @@ function FreeTrialPill({ heading = false, ripple = false }) {
 
 export function StepSelectModule({ state, set, next, back, skip, submitModule }) {
   const sel = state.modules.filter((id) => MODULES.some((m) => m.id === id));
-  // Single-select: clicking a card replaces the selection. Re-clicking the
-  // already-selected card is a no-op so users can't accidentally clear it; to
-  // switch, click the other card. State stays an array so the rest of the
-  // flow (getActiveStepIds / getDisplaySteps) keeps working unchanged.
+  // Multi-select toggle: clicking a card adds or removes it from the
+  // selection. Continue is gated on sel.length > 0 so users must pick at
+  // least one — both can be picked together for a full setup.
   const pick = (id) => {
-    if (sel.length === 1 && sel[0] === id) return;
-    set({ modules: [id] });
+    const next = sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id];
+    set({ modules: next });
   };
   const [saving, setSaving] = useState(false);
+  const [exiting, setExiting] = useState(false);
   const [saveError, setSaveError] = useState('');
 
   const handleNext = async () => {
@@ -178,6 +178,25 @@ export function StepSelectModule({ state, set, next, back, skip, submitModule })
       }
     }
     next();
+  };
+
+  // Save the current selection then bounce to Module 1's entity list.
+  // The user's localStorage state (current step + form data) survives so
+  // re-entering onboarding resumes them where they left off.
+  const handleSaveAndExit = async () => {
+    if (sel.length === 0 || exiting || saving) return;
+    setSaveError('');
+    if (typeof submitModule === 'function') {
+      setExiting(true);
+      const result = await submitModule();
+      if (!result?.ok) {
+        setExiting(false);
+        setSaveError(result?.error || 'Failed to save module selection. Please try again.');
+        return;
+      }
+    }
+    const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
+    window.location.href = `${base}/entity`;
   };
 
   return (
@@ -236,13 +255,22 @@ export function StepSelectModule({ state, set, next, back, skip, submitModule })
       <p className="module-caption">
         *Each module is 280HKD /month subscription, free during your trial period.
       </p>
-      <div className="step-nav">
+      <div className="step-nav" style={{ alignItems: 'flex-start' }}>
         <button className="btn btn-ghost" onClick={back}>
           <Icon.ArrowLeft /> Back
         </button>
         <div className="module-nav">
-          <button className="btn btn-primary" disabled={sel.length === 0 || saving} onClick={handleNext}>
+          <button className="btn btn-primary" disabled={sel.length === 0 || saving || exiting} onClick={handleNext}>
             {saving ? 'Saving…' : <>Save &amp; Next <Icon.Arrow /></>}
+          </button>
+          <button
+            type="button"
+            className="btn-link-center"
+            style={{ alignSelf: 'flex-end' }}
+            disabled={sel.length === 0 || saving || exiting}
+            onClick={handleSaveAndExit}
+          >
+            {exiting ? 'Saving…' : 'Save & Exit'}
           </button>
           {sel.length === 0 && (
             <div className="module-require">You must pick a module to continue with your registration process.</div>
@@ -597,7 +625,7 @@ function PCSection({ title, fields, cardRef }) {
   );
 }
 
-export function StepSalesSetting({ state, set, next, back, skip, submitSalesMethods }) {
+export function StepSalesSetting({ state, set, next, back, skip, submitSalesMethods, fetchExistingSalesMethods }) {
   const p = state.pettyCash;
   const upd = (k, v) => set({ pettyCash: { ...p, [k]: v } });
   const balanceRef = useRef(null);
@@ -658,7 +686,8 @@ export function StepSalesSetting({ state, set, next, back, skip, submitSalesMeth
   const sameList = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
   const isAutofilled = sameList(p.electronicMethods || [], DEFAULT_ELECTRONIC) && sameList(p.deliveryMethods || [], DEFAULT_DELIVERY);
 
-  const resetDefaults = () => {
+  const [autoFilling, setAutoFilling] = useState(false);
+  const resetDefaults = async () => {
     if (isAutofilled) {
       set({
         pettyCash: {
@@ -669,15 +698,29 @@ export function StepSalesSetting({ state, set, next, back, skip, submitSalesMeth
       });
       return;
     }
+    if (autoFilling) return;
+    setAutoFilling(true);
+    let electronic = [...DEFAULT_ELECTRONIC];
+    let delivery = [...DEFAULT_DELIVERY];
+    if (typeof fetchExistingSalesMethods === 'function') {
+      const existing = await fetchExistingSalesMethods();
+      if (existing && Array.isArray(existing.electronic) && existing.electronic.length > 0) {
+        electronic = existing.electronic;
+      }
+      if (existing && Array.isArray(existing.delivery) && existing.delivery.length > 0) {
+        delivery = existing.delivery;
+      }
+    }
     set({
       pettyCash: {
         ...p,
-        electronicMethods: [...DEFAULT_ELECTRONIC],
-        deliveryMethods: [...DEFAULT_DELIVERY],
+        electronicMethods: electronic,
+        deliveryMethods: delivery,
         expenseCodes: { all: true, selected: {} },
         openingDate: todayIso,
       },
     });
+    setAutoFilling(false);
   };
   return (
     <>
@@ -736,10 +779,6 @@ export function StepSalesSetting({ state, set, next, back, skip, submitSalesMeth
               value={p.openingDate || ''}
               onChange={(v) => upd('openingDate', v)}
               placeholder="Select a date"
-              minDate={(() => {
-                const d = new Date();
-                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-              })()}
             />
           </div>
           <div className={'pc-field' + (showBalanceError && balanceEmpty ? ' field-error' : '')}>

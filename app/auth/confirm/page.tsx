@@ -1,9 +1,11 @@
 "use client";
 
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-const FLASK_BASE = process.env.NEXT_PUBLIC_FLASK_URL || "http://localhost:5001";
+const FLASK_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
+const RESEND_COOLDOWN_SECONDS = 60;
+const MAX_ATTEMPTS = 5;
 
 const maskEmail = (email: string) => {
   if (!email || !email.includes("@")) return email || "your email";
@@ -16,16 +18,30 @@ function ConfirmContent() {
   const searchParams = useSearchParams();
   const email = searchParams.get("email") || "";
   const inviteToken = searchParams.get("invite") || "";
+  const firstName = searchParams.get("fn") || "";
+  const lastName = searchParams.get("ln") || "";
   const emailDisplay = maskEmail(email);
 
   const [digits, setDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState("");
+  const [attemptsLeft, setAttemptsLeft] = useState(MAX_ATTEMPTS);
+  const [resending, setResending] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
   const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
 
   const code = digits.join("");
-  const canVerify = code.length === 6 && !verifying;
+  const noAttempts = attemptsLeft === 0;
+  const canVerify = code.length === 6 && !verifying && !noAttempts;
+  const canResend = !resending && resendCooldown === 0;
+
+  // Resend cooldown — ticks down to 0 once Resend Code has been triggered.
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const id = setTimeout(() => setResendCooldown((s: number) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [resendCooldown]);
 
   const onVerify = async () => {
     if (!canVerify) return;
@@ -35,10 +51,20 @@ function ConfirmContent() {
       const res = await fetch(`${FLASK_BASE}/auth/email/verify-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, code, invite: inviteToken }),
+        body: JSON.stringify({
+          email,
+          code,
+          invite: inviteToken,
+          first_name: firstName,
+          last_name: lastName,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data.status === "error") {
+        // Decrement client-side attempts on any server-acknowledged failure.
+        // Network errors (catch branch) don't count — the user never actually
+        // submitted a wrong code in that case.
+        setAttemptsLeft((a) => Math.max(0, a - 1));
         setError(data.message || "Verification failed.");
         setVerifying(false);
         return;
@@ -52,6 +78,36 @@ function ConfirmContent() {
     } catch {
       setError("Network error — is the Flask server running?");
       setVerifying(false);
+    }
+  };
+
+  const onResend = async () => {
+    if (!canResend) return;
+    setError("");
+    setResending(true);
+    try {
+      const res = await fetch(`${FLASK_BASE}/auth/email/request-code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.status === "error") {
+        setError(data.message || "Could not resend the code. Please try again.");
+        setResending(false);
+        return;
+      }
+      // Fresh code: clear the cells, refill attempts, kick off the cooldown
+      // so Resend can't be spammed.
+      setDigits(["", "", "", "", "", ""]);
+      setActiveIdx(0);
+      setAttemptsLeft(MAX_ATTEMPTS);
+      setResendCooldown(RESEND_COOLDOWN_SECONDS);
+      setResending(false);
+      inputsRef.current[0]?.focus();
+    } catch {
+      setError("Network error — is the Flask server running?");
+      setResending(false);
     }
   };
 
@@ -144,10 +200,29 @@ function ConfirmContent() {
           </button>
           {error && <div className="auth-error" role="alert">{error}</div>}
 
+          {noAttempts && (
+            <div className="confirm-status" aria-live="polite">
+              <span className="confirm-status-warn">No attempts left — please resend the code.</span>
+            </div>
+          )}
+
           <p className="confirm-resend">
             Didn&apos;t received the code?{" "}
-            <a className="auth-link" href="#" onClick={(e) => e.preventDefault()}>
-              Resend Code
+            <a
+              className="auth-link"
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                onResend();
+              }}
+              aria-disabled={!canResend}
+              style={!canResend ? { opacity: 0.55, pointerEvents: "none" } : undefined}
+            >
+              {resending
+                ? "Sending…"
+                : resendCooldown > 0
+                ? `Resend in 0:${String(resendCooldown).padStart(2, "0")}`
+                : "Resend Code"}
             </a>
           </p>
         </div>
@@ -251,6 +326,23 @@ function ConfirmContent() {
           font-size: 13px;
           text-align: center;
           margin-top: -8px;
+        }
+
+        .confirm-status {
+          margin-top: -6px;
+          font-size: 13px;
+          color: var(--muted);
+          text-align: center;
+          font-variant-numeric: tabular-nums;
+        }
+        .confirm-status-time {
+          color: var(--ink);
+          font-weight: 600;
+          font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+        .confirm-status-warn {
+          color: var(--danger);
+          font-weight: 600;
         }
 
         .confirm-resend {
