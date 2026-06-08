@@ -148,7 +148,10 @@ function AuthContent() {
               type="button"
               className="btn btn-ghost btn-block auth-xero"
               onClick={() => {
-                /* dummy — no Xero handoff wired yet */
+                const xqs = new URLSearchParams();
+                if (inviteToken) xqs.set("invite", inviteToken);
+                const suffix = xqs.toString() ? `?${xqs.toString()}` : "";
+                window.location.href = `${FLASK_BASE}/xero_auth${suffix}`;
               }}
             >
               Log in with Xero
@@ -201,6 +204,8 @@ function AuthContent() {
            screenshot. Everything else (input padding 14px 16px,
            label 14px) comes from .form-stack untouched. */
         .auth-form { gap: 14px; }
+
+        .auth-xero-logo { width: 18px; height: 18px; object-fit: contain; }
 
         .auth-error {
           color: var(--danger);
