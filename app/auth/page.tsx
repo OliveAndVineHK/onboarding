@@ -148,10 +148,11 @@ function AuthContent() {
               type="button"
               className="btn btn-ghost btn-block auth-xero"
               onClick={() => {
-                const xqs = new URLSearchParams();
-                if (inviteToken) xqs.set("invite", inviteToken);
-                const suffix = xqs.toString() ? `?${xqs.toString()}` : "";
-                window.location.href = `${FLASK_BASE}/xero_auth${suffix}`;
+                // Top-level navigation — Xero OAuth requires a cross-origin
+                // redirect, not a fetch. Flask's /callback handler now sends
+                // an OTP and bounces back to /auth/confirm after the OAuth
+                // round-trip succeeds.
+                window.location.href = `${FLASK_BASE}/xero_auth`;
               }}
             >
               Log in with Xero
@@ -160,7 +161,12 @@ function AuthContent() {
 
             <p className="auth-foot">
               Don&apos;t have an account?{" "}
-              <a className="auth-link" href="#" onClick={(e) => e.preventDefault()}>
+              <a
+                className="auth-link"
+                href="https://www.xero.com/signup/"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 Sign up
               </a>
             </p>
@@ -205,13 +211,78 @@ function AuthContent() {
            label 14px) comes from .form-stack untouched. */
         .auth-form { gap: 14px; }
 
-        .auth-xero-logo { width: 18px; height: 18px; object-fit: contain; }
-
         .auth-error {
           color: var(--danger);
           font-size: 13px;
           text-align: center;
           margin-top: -6px;
+        }
+        .auth-divider {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          color: var(--muted);
+          font-size: 13px;
+          padding: 2px 0;
+        }
+        .auth-divider::before,
+        .auth-divider::after {
+          content: "";
+          flex: 1;
+          height: 1px;
+          background: var(--line);
+        }
+        .auth-xero {
+          background: var(--bg);
+          color: var(--ink);
+        }
+        .auth-xero-logo {
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          object-fit: cover;
+        }
+        .auth-foot {
+          margin: 4px 0 0;
+          text-align: center;
+          font-size: 14px;
+          color: var(--ink-2);
+        }
+        .auth-link {
+          color: var(--accent-ink);
+          font-weight: 600;
+          text-decoration: underline;
+          text-underline-offset: 2px;
+        }
+        .auth-link:hover {
+          color: var(--accent);
+        }
+        .auth-notice {
+          display: flex;
+          gap: 12px;
+          padding: 14px 16px;
+          border: 1px solid var(--line);
+          border-radius: var(--radius);
+          background: var(--bg);
+        }
+        .auth-notice-icon {
+          color: var(--accent);
+          flex-shrink: 0;
+          padding-top: 2px;
+        }
+        .auth-notice-body {
+          font-size: 13px;
+          line-height: 1.55;
+          color: var(--ink-2);
+        }
+        .auth-notice-title {
+          font-weight: 700;
+          color: var(--ink);
+          margin-bottom: 2px;
+          font-size: 14px;
+        }
+        .auth-notice-body p {
+          margin: 0;
         }
       `}</style>
     </>
