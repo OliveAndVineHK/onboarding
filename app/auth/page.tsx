@@ -151,8 +151,12 @@ function AuthContent() {
                 // Top-level navigation — Xero OAuth requires a cross-origin
                 // redirect, not a fetch. Flask's /callback handler now sends
                 // an OTP and bounces back to /auth/confirm after the OAuth
-                // round-trip succeeds.
-                window.location.href = `${FLASK_BASE}/xero_auth`;
+                // round-trip succeeds. Forward the invite token so invited
+                // users who choose Xero don't lose their invite.
+                const xqs = new URLSearchParams();
+                if (inviteToken) xqs.set("invite", inviteToken);
+                const suffix = xqs.toString() ? `?${xqs.toString()}` : "";
+                window.location.href = `${FLASK_BASE}/xero_auth${suffix}`;
               }}
             >
               Log in with Xero
