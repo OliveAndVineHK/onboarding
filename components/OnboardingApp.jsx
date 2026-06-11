@@ -471,7 +471,15 @@ export default function OnboardingApp() {
       const now = Math.floor(Date.now() / 1000);
       const savedExpired = !!(savedClaims && savedClaims.exp && savedClaims.exp <= now);
       const differentUser = !!(urlClaims && savedClaims && urlClaims.user_id !== savedClaims.user_id);
-      if (savedExpired || differentUser) {
+      // A launch URL that names an entity is an explicit "onboard THIS entity"
+      // intent from Module 1. If the saved blob is for a different entity, it's
+      // stale (e.g. a prior abandoned session) — discard it so the new entity
+      // wins instead of replaying the old id/name and 403-ing on its modules.
+      const urlEntityName = (p.get('entity_name') || p.get('entity') || '').trim();
+      const savedEntityName = ((saved.state && saved.state.entity && saved.state.entity.name) || '').trim();
+      const differentEntity = !!(urlEntityName && savedEntityName &&
+        urlEntityName.toLowerCase() !== savedEntityName.toLowerCase());
+      if (savedExpired || differentUser || differentEntity) {
         try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
       } else {
         if (urlToken) setToken(urlToken);
