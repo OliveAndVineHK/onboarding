@@ -25,8 +25,38 @@ export function ToggleRow({ title, sub, on, onChange }) {
   );
 }
 
+// Shared "Save & Exit" control shown in every step's footer. Saves the current
+// step's data best-effort (via the step's submit fn) then leaves to the entity
+// list dashboard. The actual save+redirect lives in OnboardingApp's saveAndExit;
+// here we just manage the local "Saving…" state. `submitFn` is optional — steps
+// without a per-step save (Invite, Connect Xero) pass nothing and we exit after
+// persisting via localStorage.
+export function SaveExitLink({ saveAndExit, submitFn, disabled = false, className = 'btn-link-center', style }) {
+  const [exiting, setExiting] = useState(false);
+  const onClick = async () => {
+    if (exiting || disabled) return;
+    setExiting(true);
+    try {
+      await saveAndExit(submitFn);
+    } catch {
+      setExiting(false); // saveAndExit redirects on success, so we only land here on failure
+    }
+  };
+  return (
+    <button
+      type="button"
+      className={className}
+      style={style}
+      disabled={disabled || exiting}
+      onClick={onClick}
+    >
+      {exiting ? 'Saving…' : 'Save & Exit'}
+    </button>
+  );
+}
+
 // --- Step 1: Create Entity ---
-export function StepCreateEntity({ state, set, next, skip, submitEntity }) {
+export function StepCreateEntity({ state, set, next, skip, submitEntity, saveAndExit }) {
   const s = state.entity;
   const upd = (k, v) => set({ entity: { ...s, [k]: v } });
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.email);
@@ -94,6 +124,7 @@ export function StepCreateEntity({ state, set, next, skip, submitEntity }) {
         <button className="btn btn-primary btn-block btn-jelly" disabled={!canNext || saving} onClick={handleNext}>
           {saving ? 'Saving…' : 'Save & Next'}
         </button>
+        <SaveExitLink saveAndExit={saveAndExit} submitFn={submitEntity} disabled={saving} />
         <button className="btn-link-center" onClick={backToEntityList}>Back to Entity List</button>
       </div>
     </>
@@ -106,7 +137,7 @@ export const MODULES = [
   { id: 'bills', title: 'Bill Payment', desc: 'Capture vendor bills, schedule payments, and reconcile with your accounting ledger.', img: '/payment-icon.png', accent: '#3aa6f5', price: '280 HKD per Month' },
 ];
 
-function FreeTrialPill({ heading = false, ripple = false }) {
+function FreeTrialPill({ heading = false, ripple = false, label = 'Free Trial' }) {
   const [pos, setPos] = useState(null);
   const [mounted, setMounted] = useState(false);
   const ref = useRef(null);
@@ -138,7 +169,7 @@ function FreeTrialPill({ heading = false, ripple = false }) {
         onClick={(e) => e.stopPropagation()}
         style={heading ? { fontSize: 12.5, padding: '4px 13px' } : undefined}
       >
-        Free Trial
+        {label}
       </span>
       {mounted &&
         pos &&
@@ -152,7 +183,7 @@ function FreeTrialPill({ heading = false, ripple = false }) {
   );
 }
 
-export function StepSelectModule({ state, set, next, back, skip, submitModule }) {
+export function StepSelectModule({ state, set, next, back, skip, submitModule, saveAndExit }) {
   const sel = state.modules.filter((id) => MODULES.some((m) => m.id === id));
   // Multi-select toggle: clicking a card adds or removes it from the
   // selection. Continue is gated on sel.length > 0 so users must pick at
@@ -162,7 +193,6 @@ export function StepSelectModule({ state, set, next, back, skip, submitModule })
     set({ modules: next });
   };
   const [saving, setSaving] = useState(false);
-  const [exiting, setExiting] = useState(false);
   const [saveError, setSaveError] = useState('');
 
   const handleNext = async () => {
@@ -180,30 +210,11 @@ export function StepSelectModule({ state, set, next, back, skip, submitModule })
     next();
   };
 
-  // Save the current selection then bounce to Module 1's entity list.
-  // The user's localStorage state (current step + form data) survives so
-  // re-entering onboarding resumes them where they left off.
-  const handleSaveAndExit = async () => {
-    if (sel.length === 0 || exiting || saving) return;
-    setSaveError('');
-    if (typeof submitModule === 'function') {
-      setExiting(true);
-      const result = await submitModule();
-      if (!result?.ok) {
-        setExiting(false);
-        setSaveError(result?.error || 'Failed to save module selection. Please try again.');
-        return;
-      }
-    }
-    const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
-    window.location.href = `${base}/entity`;
-  };
-
   return (
     <>
       <div className="page-head">
         <h2 className="module-title">
-          Choose a module <FreeTrialPill heading ripple />
+          Choose a module <FreeTrialPill heading ripple label="Beta Version" />
         </h2>
         <p>Pick the module you&apos;d like to start with. You can add more later from settings.</p>
       </div>
@@ -253,24 +264,16 @@ export function StepSelectModule({ state, set, next, back, skip, submitModule })
         })}
       </div>
       <p className="module-caption">
-        *Each module is 280HKD /month subscription, free during your trial period.
+        *Each module is 280HKD /month subscription, free during the beta period.
       </p>
-      <div className="step-nav" style={{ alignItems: 'flex-start' }}>
+      <div className="step-nav">
         <button className="btn btn-ghost" onClick={back}>
           <Icon.ArrowLeft /> Back
         </button>
-        <div className="module-nav">
-          <button className="btn btn-primary" disabled={sel.length === 0 || saving || exiting} onClick={handleNext}>
+        <div className="step-actions">
+          <SaveExitLink saveAndExit={saveAndExit} submitFn={submitModule} disabled={saving} />
+          <button className="btn btn-primary" disabled={sel.length === 0 || saving} onClick={handleNext}>
             {saving ? 'Saving…' : <>Save &amp; Next <Icon.Arrow /></>}
-          </button>
-          <button
-            type="button"
-            className="btn-link-center"
-            style={{ alignSelf: 'flex-end' }}
-            disabled={sel.length === 0 || saving || exiting}
-            onClick={handleSaveAndExit}
-          >
-            {exiting ? 'Saving…' : 'Save & Exit'}
           </button>
           {sel.length === 0 && (
             <div className="module-require">You must pick a module to continue with your registration process.</div>
@@ -283,7 +286,7 @@ export function StepSelectModule({ state, set, next, back, skip, submitModule })
 }
 
 // --- Step 3: Connect to Xero ---
-export function StepConnectXero({ state, set, next, back, skip, connectXero }) {
+export function StepConnectXero({ state, set, next, back, skip, connectXero, saveAndExit }) {
   const connected = state.xero.connected;
   const lastConnected = state.xero.lastConnected || '07 May 2026';
   const xeroEntity = state.xero.org || state.entity.name || 'Olive & Vine Inc';
@@ -372,7 +375,8 @@ export function StepConnectXero({ state, set, next, back, skip, connectXero }) {
         <button className="btn btn-ghost" onClick={back}>
           <Icon.ArrowLeft /> Back
         </button>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div className="step-actions">
+          <SaveExitLink saveAndExit={saveAndExit} />
           <button className="btn btn-primary" onClick={next}>
             Save &amp; Next <Icon.Arrow />
           </button>
@@ -625,7 +629,8 @@ function PCSection({ title, fields, cardRef }) {
   );
 }
 
-export function StepSalesSetting({ state, set, next, back, skip, submitSalesMethods, fetchExistingSalesMethods }) {
+export function StepSalesSetting({ state, set, next, back, skip, submitSalesMethods, fetchExistingSalesMethods, saveAndExit }) {
+  const stepSubmit = submitSalesMethods;
   const p = state.pettyCash;
   const upd = (k, v) => set({ pettyCash: { ...p, [k]: v } });
   const balanceRef = useRef(null);
@@ -808,7 +813,8 @@ export function StepSalesSetting({ state, set, next, back, skip, submitSalesMeth
         <button className="btn btn-ghost" onClick={back}>
           <Icon.ArrowLeft /> Back
         </button>
-        <div className="module-nav">
+        <div className="step-actions">
+          <SaveExitLink saveAndExit={saveAndExit} submitFn={stepSubmit} disabled={saving} />
           <button className="btn btn-primary" onClick={tryNext} disabled={saving}>
             {saving ? 'Saving…' : <>Save &amp; Next <Icon.Arrow /></>}
           </button>
@@ -819,7 +825,8 @@ export function StepSalesSetting({ state, set, next, back, skip, submitSalesMeth
   );
 }
 
-export function StepAccountCode({ state, set, next, back, skip, accountOptions, submitAccountCodes }) {
+export function StepAccountCode({ state, set, next, back, skip, accountOptions, submitAccountCodes, saveAndExit }) {
+  const stepSubmit = submitAccountCodes;
   const p = state.pettyCash;
   const upd = (k, v) => set({ pettyCash: { ...p, [k]: v } });
   const [saving, setSaving] = useState(false);
@@ -994,7 +1001,8 @@ export function StepAccountCode({ state, set, next, back, skip, accountOptions, 
         <button className="btn btn-ghost" onClick={back}>
           <Icon.ArrowLeft /> Back
         </button>
-        <div className="module-nav">
+        <div className="step-actions">
+          <SaveExitLink saveAndExit={saveAndExit} submitFn={stepSubmit} disabled={saving} />
           <button className="btn btn-primary" onClick={tryNext} disabled={saving}>
             {saving ? 'Saving…' : <>Save &amp; Next <Icon.Arrow /></>}
           </button>
@@ -1005,7 +1013,8 @@ export function StepAccountCode({ state, set, next, back, skip, accountOptions, 
   );
 }
 
-export function StepOthers({ state, set, next, back, skip, accountOptions, submitContacts }) {
+export function StepOthers({ state, set, next, back, skip, accountOptions, submitContacts, saveAndExit }) {
+  const stepSubmit = submitContacts;
   const p = state.pettyCash;
   const upd = (k, v) => set({ pettyCash: { ...p, [k]: v } });
   const [saving, setSaving] = useState(false);
@@ -1104,7 +1113,8 @@ export function StepOthers({ state, set, next, back, skip, accountOptions, submi
         <button className="btn btn-ghost" onClick={back}>
           <Icon.ArrowLeft /> Back
         </button>
-        <div className="module-nav">
+        <div className="step-actions">
+          <SaveExitLink saveAndExit={saveAndExit} submitFn={stepSubmit} disabled={saving} />
           <button className="btn btn-primary" onClick={tryNext} disabled={saving}>
             {saving ? 'Saving…' : <>Save &amp; Next <Icon.Arrow /></>}
           </button>
@@ -1181,7 +1191,8 @@ function BillAccountCodesCard({ codes, value, onChange, labels }) {
   );
 }
 
-export function StepBills({ state, set, next, back, skip, accountOptions, submitBills }) {
+export function StepBills({ state, set, next, back, skip, accountOptions, submitBills, saveAndExit }) {
+  const stepSubmit = submitBills;
   const b = state.bills;
   const upd = (k, v) => set({ bills: { ...b, [k]: v } });
   const [saving, setSaving] = useState(false);
@@ -1227,7 +1238,8 @@ export function StepBills({ state, set, next, back, skip, accountOptions, submit
         <button className="btn btn-ghost" onClick={back}>
           <Icon.ArrowLeft /> Back
         </button>
-        <div className="module-nav">
+        <div className="step-actions">
+          <SaveExitLink saveAndExit={saveAndExit} submitFn={stepSubmit} disabled={saving} />
           <button className="btn btn-primary" onClick={tryNext} disabled={saving}>
             {saving ? 'Saving…' : <>Save &amp; Next <Icon.Arrow /></>}
           </button>
@@ -1245,11 +1257,14 @@ const ROLES = ['Admin', 'Accountant', 'Shop Manager', 'Cashier'];
 const roleToValue = (label) => (label || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
 const roleLabel = (value) => (value || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
-export function StepInvite({ state, set, next, back, skip, submitInvite, cancelInvite }) {
+export function StepInvite({ state, set, next, back, skip, submitInvite, cancelInvite, saveAndExit }) {
   const list = state.invites.filter((x) => x.email && x.email.includes('@'));
   const [form, setForm] = useState({ first: '', last: '', email: '', role: '' });
   const [toast, setToast] = useState(null);
   const [error, setError] = useState('');
+  // Confirmation modal shown when the user clicks "Skip for now" — nudges them
+  // to invite an accountant before skipping (the later steps need expertise).
+  const [confirmSkip, setConfirmSkip] = useState(false);
   const [sending, setSending] = useState(false);
   const setF = (k, v) => setForm({ ...form, [k]: v });
 
@@ -1412,8 +1427,9 @@ export function StepInvite({ state, set, next, back, skip, submitInvite, cancelI
         <button className="btn btn-ghost" onClick={back}>
           <Icon.ArrowLeft /> Back
         </button>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn btn-link" onClick={skip}>
+        <div className="step-actions">
+          <SaveExitLink saveAndExit={saveAndExit} />
+          <button className="btn btn-link" onClick={() => setConfirmSkip(true)}>
             Skip for now <Icon.Skip />
           </button>
           <button className="btn btn-primary" onClick={next}>
@@ -1421,6 +1437,67 @@ export function StepInvite({ state, set, next, back, skip, submitInvite, cancelI
           </button>
         </div>
       </div>
+
+      {confirmSkip && (
+        <div
+          className="skip-modal-overlay"
+          role="presentation"
+          onClick={() => setConfirmSkip(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20,
+            background: 'rgba(15, 23, 27, 0.45)',
+          }}
+        >
+          <div
+            className="skip-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="skip-modal-title"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#f1f3f4',
+              border: '1px solid var(--line)',
+              borderRadius: 'var(--radius)',
+              boxShadow: '0 20px 48px rgba(0, 0, 0, 0.22)',
+              padding: '26px 26px 22px',
+              maxWidth: 440,
+              width: '100%',
+            }}
+          >
+            <p id="skip-modal-title" className="skip-modal-lead">
+              The following setup steps require accounting expertise.
+            </p>
+            <p className="skip-modal-body">
+              Xero recommends you invite your accountant or bookkeeper to assist you with these steps.
+            </p>
+            <p className="skip-modal-body" style={{ marginBottom: 32 }}>Do you want to invite users now?</p>
+            <div
+              className="skip-modal-actions"
+              style={{ display: 'flex', justifyContent: 'center', gap: 10 }}
+            >
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => {
+                  setConfirmSkip(false);
+                  skip();
+                }}
+              >
+                No, skip this step
+              </button>
+              <button type="button" className="btn btn-primary" onClick={() => setConfirmSkip(false)}>
+                Yes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

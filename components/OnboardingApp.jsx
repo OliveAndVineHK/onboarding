@@ -899,6 +899,21 @@ export default function OnboardingApp() {
     return { ok: true, redirect: true };
   };
 
+  // Save-and-exit from any step: best-effort save of the current step's data
+  // (each submitX no-ops on empty/standalone), then leave to the entity-list
+  // dashboard. localStorage already persists current+state, so re-entering
+  // onboarding resumes the user where they left off. A failed save does NOT
+  // block the exit — we save what's valid and go.
+  const saveAndExit = async (submitFn) => {
+    try {
+      if (typeof submitFn === 'function') await submitFn();
+    } catch {
+      /* best-effort — never block the exit on a save failure */
+    }
+    const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
+    window.location.href = `${base}/entity`;
+  };
+
   const fetchExistingSalesMethods = async () => {
     if (!token || !state.entity.id) return null;
     const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
@@ -940,7 +955,7 @@ export default function OnboardingApp() {
     r.style.setProperty('--accent-hover', ACCENT_DEFAULTS.accent);
   }, []);
 
-  const stepProps = { state, set, next, back, skip, restart, submitEntity, submitModule, connectXero, submitSalesMethods, fetchExistingSalesMethods, accountOptions, submitAccountCodes, submitContacts, submitBills, submitInvite, cancelInvite, finishOnboarding };
+  const stepProps = { state, set, next, back, skip, restart, submitEntity, submitModule, connectXero, submitSalesMethods, fetchExistingSalesMethods, accountOptions, submitAccountCodes, submitContacts, submitBills, submitInvite, cancelInvite, finishOnboarding, saveAndExit };
 
   return (
     <>

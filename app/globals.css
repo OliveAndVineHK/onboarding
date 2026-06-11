@@ -440,6 +440,32 @@
     margin-top: 28px;
   }
   .step-nav .spacer { flex: 1; }
+  /* Right-side action group: Save & Exit + Save & Next laid out horizontally,
+     so every step footer reads [Back] ... [Save & Exit] [Save & Next]. */
+  .step-actions { display: flex; align-items: center; gap: 12px; }
+  .step-actions .module-require { flex-basis: 100%; text-align: right; }
+
+  /* Skip-confirmation modal (Step 3: Invite) */
+  .skip-modal-overlay {
+    position: fixed; inset: 0; z-index: 1000;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+    background: rgba(15, 23, 27, 0.45);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+  }
+  .skip-modal {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.22);
+    padding: 26px 26px 22px;
+    max-width: 440px; width: 100%;
+  }
+  .skip-modal-lead { margin: 0 0 12px; font-size: 16px; font-weight: 700; color: var(--ink); }
+  .skip-modal-body { margin: 0 0 12px; font-size: 14px; line-height: 1.55; color: var(--ink-2); }
+  .skip-modal-body:last-of-type { margin-bottom: 22px; }
+  .skip-modal-actions { display: flex; justify-content: center; gap: 10px; }
 
   /* Cards */
   .card {
