@@ -59,10 +59,11 @@ export function SaveExitLink({ saveAndExit, submitFn, disabled = false, classNam
 export function StepCreateEntity({ state, set, next, skip, submitEntity, saveAndExit }) {
   const s = state.entity;
   const upd = (k, v) => set({ entity: { ...s, [k]: v } });
-  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.email);
-  // Match Module 1 create-entity: 8–11 digits, numeric only.
+  // Phone and email are optional — but if the user does type something, it must
+  // still be valid (Module 1 create-entity: 8–11 digits; standard email shape).
+  const emailOk = s.email.trim() === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.email);
   const phoneDigits = s.phone.replace(/\D/g, '');
-  const phoneOk = phoneDigits.length >= 8 && phoneDigits.length <= 11;
+  const phoneOk = phoneDigits.length === 0 || (phoneDigits.length >= 8 && phoneDigits.length <= 11);
   const canNext = s.name.trim().length > 1 && phoneOk && emailOk;
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -107,11 +108,11 @@ export function StepCreateEntity({ state, set, next, skip, submitEntity, saveAnd
           <MintySelect value={s.currency} onChange={(v) => upd('currency', v)} options={CURRENCY_OPTIONS} searchable />
         </div>
         <div className="field">
-          <label>Contact Phone</label>
+          <label>Contact Phone <span className="field-optional">(optional)</span></label>
           <input type="tel" name="tel" autoComplete="tel" inputMode="numeric" maxLength={11} pattern="[0-9]{8,11}" title="Phone number must be 8-11 digits" placeholder="Please enter your contact phone number" value={s.phone} onChange={(e) => upd('phone', e.target.value.replace(/\D/g, '').slice(0, 11))} />
         </div>
         <div className="field">
-          <label>Business Email</label>
+          <label>Business Email <span className="field-optional">(optional)</span></label>
           <input type="email" name="email" autoComplete="email" placeholder="Please enter your business email" value={s.email} onChange={(e) => upd('email', e.target.value)} />
         </div>
       </div>
@@ -621,7 +622,15 @@ function PCSection({ title, fields, cardRef }) {
       {fields.map((f, i) => (
         <div className={'pc-field' + (f.error ? ' field-error' : '')} key={i}>
           <div className="pc-sub">{f.label}</div>
-          <MintySelect value={f.value} onChange={f.onChange} options={f.options} placeholder="Select an option" searchable />
+          <MintySelect
+            value={f.value}
+            onChange={f.onChange}
+            options={f.options}
+            placeholder="Select an option"
+            searchable
+            onCreate={f.onAddNew}
+            createNoun="contact"
+          />
           {f.error && <div className="field-required">This is a required field</div>}
         </div>
       ))}
@@ -1013,7 +1022,7 @@ export function StepAccountCode({ state, set, next, back, skip, accountOptions, 
   );
 }
 
-export function StepOthers({ state, set, next, back, skip, accountOptions, submitContacts, saveAndExit }) {
+export function StepOthers({ state, set, next, back, skip, accountOptions, submitContacts, createContact, saveAndExit }) {
   const stepSubmit = submitContacts;
   const p = state.pettyCash;
   const upd = (k, v) => set({ pettyCash: { ...p, [k]: v } });
@@ -1076,6 +1085,7 @@ export function StepOthers({ state, set, next, back, skip, accountOptions, submi
               onChange: (v) => upd('directorContact', v),
               options: contactLabels,
               error: showErrors && !p.directorContact,
+              onAddNew: createContact,
             },
           ]}
         />
@@ -1090,6 +1100,7 @@ export function StepOthers({ state, set, next, back, skip, accountOptions, submi
               onChange: (v) => upd('cashSaleContact', v),
               options: contactLabels,
               error: showErrors && !p.cashSaleContact,
+              onAddNew: createContact,
             },
           ]}
         />
@@ -1104,6 +1115,7 @@ export function StepOthers({ state, set, next, back, skip, accountOptions, submi
               onChange: (v) => upd('discrepancyContact', v),
               options: contactLabels,
               error: showErrors && !p.discrepancyContact,
+              onAddNew: createContact,
             },
           ]}
         />
@@ -1262,9 +1274,10 @@ export function StepInvite({ state, set, next, back, skip, submitInvite, cancelI
   const [form, setForm] = useState({ first: '', last: '', email: '', role: '' });
   const [toast, setToast] = useState(null);
   const [error, setError] = useState('');
-  // Confirmation modal shown when the user clicks "Skip for now" — nudges them
-  // to invite an accountant before skipping (the later steps need expertise).
-  const [confirmSkip, setConfirmSkip] = useState(false);
+  // Confirmation modal nudging the user to invite an accountant — the later
+  // steps need expertise. Shown automatically on arrival at the Invite step
+  // (right after Save & Next on Select Module) and again on "Skip for now".
+  const [confirmSkip, setConfirmSkip] = useState(true);
   const [sending, setSending] = useState(false);
   const setF = (k, v) => setForm({ ...form, [k]: v });
 
@@ -1429,7 +1442,7 @@ export function StepInvite({ state, set, next, back, skip, submitInvite, cancelI
         </button>
         <div className="step-actions">
           <SaveExitLink saveAndExit={saveAndExit} />
-          <button className="btn btn-link" onClick={() => setConfirmSkip(true)}>
+          <button className="btn btn-link" onClick={skip}>
             Skip for now <Icon.Skip />
           </button>
           <button className="btn btn-primary" onClick={next}>
@@ -1481,18 +1494,8 @@ export function StepInvite({ state, set, next, back, skip, submitInvite, cancelI
               className="skip-modal-actions"
               style={{ display: 'flex', justifyContent: 'center', gap: 10 }}
             >
-              <button
-                type="button"
-                className="btn btn-ghost"
-                onClick={() => {
-                  setConfirmSkip(false);
-                  skip();
-                }}
-              >
-                No, skip this step
-              </button>
               <button type="button" className="btn btn-primary" onClick={() => setConfirmSkip(false)}>
-                Yes
+                Ok
               </button>
             </div>
           </div>

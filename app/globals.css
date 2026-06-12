@@ -353,6 +353,7 @@
   /* Form bits */
   .field { display: flex; flex-direction: column; gap: 6px; }
   .field label { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+  .field label .field-optional { font-weight: 400; color: var(--muted); }
   .field .hint { font-size: 12px; color: var(--muted); font-weight: 500; }
   .field input, .field select, .field textarea {
     appearance: none;
@@ -487,6 +488,19 @@
   .pc-title { font-weight: 700; font-size: 15.5px; color: var(--ink); margin-bottom: 4px; }
   .pc-field { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
   .pc-sub { font-size: 13px; color: var(--muted); }
+  /* In-dropdown "+ Add '<name>' as a new contact" row + inline create panel. */
+  .mselect-create { color: var(--accent-ink); font-weight: 600; border-top: 1px solid var(--line); }
+  .mselect-create .mselect-opt-label { color: var(--accent-ink); }
+  .mselect-create-panel { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .mselect-create-label { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+  .mselect-create-input { width: 100%; padding: 9px 11px; border: 1.5px solid var(--line-strong); border-radius: 10px; font-size: 14px; }
+  .mselect-create-input:focus, .mselect-create-input:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in oklab, var(--accent) 25%, transparent); }
+  .mselect-create-error { color: #c0392b; font-size: 12.5px; }
+  .mselect-create-actions { display: flex; gap: 8px; }
+  .mselect-create-btn { flex: 1; padding: 8px 12px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .mselect-create-btn.ghost { background: transparent; color: var(--accent-ink); border: 1.5px solid var(--accent); }
+  .mselect-create-btn.primary { background: var(--accent); color: #fff; border: 1.5px solid var(--accent); }
+  .mselect-create-btn:disabled { opacity: 0.55; cursor: default; }
   .pc-link { color: var(--accent-ink); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
   .pc-link:hover { color: var(--accent); }
   .pc-hint { color: var(--muted-2); font-size: 12.5px; font-weight: 400; margin-left: 4px; }

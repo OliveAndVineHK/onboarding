@@ -44,6 +44,23 @@ function readJwtClaims(token) {
   }
 }
 
+// Backend module codes → frontend module ids (inverse of FE_TO_BACKEND_MODULE).
+const BACKEND_TO_FE_MODULE = { PETTY_CASH: 'pettyCash', BILL: 'bills' };
+
+// Derive the frontend step id to land on from a backend /state payload. The
+// backend's own `current_step` is derived from a different ordering (modules →
+// Xero → petty-cash → bills/invite) than the FE flow (1 Basic, 2 Module,
+// 3 Invite, 4 Accounting/Xero, …), so we recompute against the FE order here
+// instead of trusting it as a raw index. Conservative: land on the earliest
+// step whose data isn't yet saved, never deep in a half-configured flow.
+function deriveResumeStep(s) {
+  const modules = Array.isArray(s.modules) ? s.modules : [];
+  if (modules.length === 0) return 2; // basic info done → Select Module
+  // Modules chosen but Xero not yet connected → Invite (3), then Xero (4).
+  if (!(s.xero && s.xero.connected)) return 3;
+  return 4; // connected → Accounting/Sales onward; per-step GETs refill details
+}
+
 const STEPS = [
   { id: 1, label: 'Basic Information', short: 'Basic Information', tiny: 'Basic' },
   { id: 2, label: 'Select Module', short: 'Select Module', tiny: 'Module' },
@@ -154,9 +171,10 @@ function isStepComplete(id, state) {
   switch (id) {
     case 1: {
       const e = state.entity;
-      const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.email);
+      // Phone and email are optional — valid only if non-empty.
+      const emailOk = e.email.trim() === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.email);
       const phoneDigits = e.phone.replace(/\D/g, '');
-      const phoneOk = phoneDigits.length >= 8 && phoneDigits.length <= 11;
+      const phoneOk = phoneDigits.length === 0 || (phoneDigits.length >= 8 && phoneDigits.length <= 11);
       return e.name.trim().length > 1 && phoneOk && emailOk;
     }
     case 2:
@@ -392,6 +410,73 @@ export default function OnboardingApp() {
     }
   }, [current, maxReached, state, token, profileUrl, user]);
 
+  // Cold resume: rehydrate the whole wizard from the backend `entities` row
+  // (status='onboarding') instead of localStorage, so resume works in a fresh
+  // browser / incognito / cleared storage / another device. The backend GET
+  // /api/onboarding/state is authoritative; localStorage is a cache-only
+  // fallback used if the fetch fails. `resumeToken` is the fresh JWT the resume
+  // redirect minted; it authorizes calls for this entity_id (membership-checked).
+  const resumeFromServer = async (entityId, resumeToken) => {
+    const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
+    let payload = null;
+    try {
+      const res = await fetch(
+        `${base}/api/onboarding/state?entity_id=${encodeURIComponent(entityId)}`,
+        { headers: { Authorization: `Bearer ${resumeToken}` } },
+      );
+      if (res.ok) payload = await res.json().catch(() => null);
+      // 401/403/404 → fall through to localStorage fallback below.
+    } catch {
+      /* network error → fall back to localStorage */
+    }
+
+    if (payload && payload.entity_id) {
+      const modules = (Array.isArray(payload.modules) ? payload.modules : [])
+        .map((code) => BACKEND_TO_FE_MODULE[code])
+        .filter(Boolean);
+      setState((prev) => ({
+        ...prev,
+        entity: {
+          ...prev.entity,
+          id: payload.entity_id,
+          // Keep FE display defaults when the server omits a field.
+          ...(payload.entity?.name ? { name: payload.entity.name } : {}),
+          ...(payload.entity?.country ? { country: payload.entity.country } : {}),
+          ...(payload.entity?.currency ? { currency: payload.entity.currency } : {}),
+        },
+        modules,
+        xero: payload.xero?.connected
+          ? { connected: true, org: payload.xero.org || prev.xero.org }
+          : prev.xero,
+        invites: Array.isArray(payload.invites) ? payload.invites : prev.invites,
+      }));
+      // Land on the FE step derived from saved data; use the backend's
+      // current_step/max_reached only as a floor (their index space differs).
+      const derived = deriveResumeStep(payload);
+      const landing = Math.max(derived, Number(payload.current_step) || 0, 1);
+      const ceiling = Math.max(landing, Number(payload.max_reached) || 0);
+      setCurrent(landing);
+      setMaxReached(ceiling);
+      return;
+    }
+
+    // Fallback: server resume unavailable — try the locally cached session for
+    // this same entity. (Different/expired sessions are ignored.)
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || 'null');
+      if (saved && saved.state) {
+        const sameEntity = saved.state.entity && saved.state.entity.id === entityId;
+        if (sameEntity) {
+          setState(saved.state);
+          if (typeof saved.current === 'number' && saved.current >= 1) setCurrent(saved.current);
+          if (typeof saved.maxReached === 'number' && saved.maxReached >= 1) setMaxReached(saved.maxReached);
+        }
+      }
+    } catch {
+      /* ignore corrupt storage */
+    }
+  };
+
   // Pick up the logged-in user (and optionally the new entity name) from the
   // launch URL that Module 1 opens after the entity is created. Falls back to
   // nothing if absent, so running the app standalone still works.
@@ -451,6 +536,40 @@ export default function OnboardingApp() {
         url.searchParams.delete('xero');
         url.searchParams.delete('step');
         url.searchParams.delete('org');
+        window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+
+    // Cold resume from the backend. The resume redirect carries both
+    // entity_id and a fresh token. When present, the DB row is authoritative —
+    // set identity from the URL synchronously, kick off the async server fetch,
+    // and skip the localStorage path (resumeFromServer falls back to it on
+    // failure). This is what makes resume survive empty localStorage.
+    const resumeEntityId = (p.get('entity_id') || '').trim();
+    const resumeUrlToken = (p.get('token') || '').trim();
+    if (resumeEntityId && resumeUrlToken) {
+      setToken(resumeUrlToken);
+      const rFirst = (p.get('first') || '').trim();
+      const rLast = (p.get('last') || '').trim();
+      const rName = (p.get('name') || '').trim();
+      if (rFirst || rLast || rName) {
+        setUser({ first: rFirst, last: rLast, name: rName || `${rFirst} ${rLast}`.trim() });
+      }
+      const rEntityName = (p.get('entity_name') || p.get('entity') || '').trim();
+      if (rEntityName) {
+        setState((prev) => ({ ...prev, entity: { ...prev.entity, name: rEntityName } }));
+      }
+      // Not awaited — the init effect stays synchronous; setters land on the
+      // next render. Strip resume params so a later refresh doesn't replay.
+      resumeFromServer(resumeEntityId, resumeUrlToken);
+      try {
+        const url = new URL(window.location.href);
+        ['entity_id', 'token', 'entity_name', 'entity', 'first', 'last', 'name', 'profile_url'].forEach((k) =>
+          url.searchParams.delete(k),
+        );
         window.history.replaceState({}, '', url.pathname + url.search + url.hash);
       } catch {
         /* ignore */
@@ -535,7 +654,14 @@ export default function OnboardingApp() {
       /* ignore quota / serialization errors */
     }
     const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
-    window.location.href = `${base}/xero_connect?from=onboarding`;
+    // Pass the entity context so the backend resolves the exact entity on the
+    // OAuth callback (it embeds this into the OAuth state). entity_id is the
+    // preferred exact match; entity_name is the fallback. Passing neither falls
+    // back to the user's latest in-progress entity — safe, but not exact.
+    window.location.href =
+      `${base}/xero_connect?from=onboarding` +
+      `&entity_id=${encodeURIComponent(state.entity.id)}` +
+      `&entity_name=${encodeURIComponent(state.entity.name || '')}`;
   };
 
   // Create the entity in Module 1 (Step 1). Token-authenticated; no cookies.
@@ -745,6 +871,44 @@ export default function OnboardingApp() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) return { ok: false, error: data.error || 'Failed to save contacts. Please try again.' };
       return { ok: true };
+    } catch {
+      return { ok: false, error: 'Could not reach the server. Please try again.' };
+    }
+  };
+
+  // Create a brand-new Xero contact inline from the contacts step, so users
+  // don't have to leave onboarding to add one. On success the returned
+  // {id, label} is appended to accountOptions.contacts (no re-fetch needed) and
+  // returned so the caller can select it in the relevant role dropdown.
+  const createContact = async (name) => {
+    const trimmed = (name || '').trim();
+    if (!trimmed) return { ok: false, error: 'Enter a contact name.' };
+    if (!token || !state.entity.id) {
+      // Standalone / no Module 1 handoff: fake an option so the prototype works.
+      const option = { id: `local-${trimmed}`, label: trimmed };
+      setAccountOptions((prev) => ({ ...prev, contacts: [...(prev.contacts || []), option] }));
+      return { ok: true, option };
+    }
+    const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
+    try {
+      const res = await fetch(`${base}/api/onboarding/contacts/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ entity_id: state.entity.id, name: trimmed }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // 409 means Xero isn't connected yet — surface that so the step can
+        // route the user back to the Xero step.
+        return {
+          ok: false,
+          error: data.error || 'Failed to create contact. Please try again.',
+          notConnected: res.status === 409 || data.connected === false,
+        };
+      }
+      const option = { id: data.id, label: data.label || trimmed };
+      setAccountOptions((prev) => ({ ...prev, contacts: [...(prev.contacts || []), option] }));
+      return { ok: true, option };
     } catch {
       return { ok: false, error: 'Could not reach the server. Please try again.' };
     }
@@ -963,7 +1127,7 @@ export default function OnboardingApp() {
     r.style.setProperty('--accent-hover', ACCENT_DEFAULTS.accent);
   }, []);
 
-  const stepProps = { state, set, next, back, skip, restart, submitEntity, submitModule, connectXero, submitSalesMethods, fetchExistingSalesMethods, accountOptions, submitAccountCodes, submitContacts, submitBills, submitInvite, cancelInvite, finishOnboarding, saveAndExit };
+  const stepProps = { state, set, next, back, skip, restart, submitEntity, submitModule, connectXero, submitSalesMethods, fetchExistingSalesMethods, accountOptions, submitAccountCodes, submitContacts, createContact, submitBills, submitInvite, cancelInvite, finishOnboarding, saveAndExit };
 
   return (
     <>
