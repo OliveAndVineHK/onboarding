@@ -57,16 +57,33 @@ const BACKEND_TO_FE_MODULE = { PETTY_CASH: 'pettyCash', BILL: 'bills' };
 // backend's own `current_step` is derived from a different ordering (modules →
 // Xero → petty-cash → bills/invite) than the FE flow (1 Basic, 2 Module,
 // 3 Invite, 4 Accounting/Xero, …), so we recompute against the FE order here
-// instead of trusting it as a raw index. Conservative: walk the FE steps in
-// order and land on the first one whose data isn't yet saved. We only consider
-// steps 1–4, because the resume payload doesn't carry petty-cash / bill detail,
-// so we can't tell whether those later steps are complete — never resume deeper
-// than "Connect to Accounting" (4) and let per-step GETs refill from there.
+// instead of trusting it as a raw index. We resume the user on the LAST step
+// they saved — the page they were on when they clicked "Save and Next" — rather
+// than the step after it. So we walk the FE steps in order and return the last
+// complete one. We only consider steps 1–4, because the resume payload doesn't
+// carry petty-cash / bill detail, so we can't judge those later steps; never
+// resume deeper than "Connect to Accounting" (4) and let per-step GETs refill.
 function deriveResumeStep(s) {
+  // "Saved" per step. Invite (3) is optional, so isStepComplete always passes
+  // it — but for resume we only count it as saved when invites were actually
+  // added, otherwise saving at Module Selection would skip the user onto Invite.
+  const isSaved = (id) => {
+    if (id === 3) return Array.isArray(s.invites) && s.invites.length > 0;
+    return isStepComplete(id, s);
+  };
+  let lastSaved = 1; // Basic Info is always the entry point.
   for (const id of [1, 2, 3, 4]) {
-    if (!isStepComplete(id, s)) return id;
+    if (isSaved(id)) {
+      lastSaved = id;
+    } else if (id === 3) {
+      // Invite is optional and skippable: an empty Invite doesn't end the flow,
+      // so keep scanning — a later saved step (e.g. connected Xero) still wins.
+      continue;
+    } else {
+      break; // a required step isn't saved → land on the last saved one.
+    }
   }
-  return 4;
+  return lastSaved;
 }
 
 const STEPS = [
