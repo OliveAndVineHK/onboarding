@@ -29,6 +29,12 @@ const XERO_RESUME_KEY = 'minty_onboarding_xero_resume';
 
 const STORAGE_KEY = 'minty_onboarding_session';
 
+// Session storage is keyed per entity so multiple in-progress entities don't
+// clobber each other. Before an entity is created it has no id yet, so its
+// draft lives under the bare global key; once `submitEntity` assigns an id,
+// writes move to `minty_onboarding_session:<id>` and the bare draft is cleared.
+const sessionKey = (entityId) => (entityId ? `${STORAGE_KEY}:${entityId}` : STORAGE_KEY);
+
 // No signature verification — client-side cache invalidation only.
 function readJwtClaims(token) {
   if (!token) return null;
@@ -401,10 +407,14 @@ export default function OnboardingApp() {
     if (typeof window === 'undefined') return;
     if (!hydratedRef.current) return;
     try {
+      const key = sessionKey(state.entity.id);
       window.localStorage.setItem(
-        STORAGE_KEY,
+        key,
         JSON.stringify({ current, maxReached, state, token, profileUrl, user }),
       );
+      // Once an id exists, the pre-id draft under the bare key is obsolete —
+      // drop it so it can't be replayed by a later fresh load.
+      if (key !== STORAGE_KEY) window.localStorage.removeItem(STORAGE_KEY);
     } catch {
       /* ignore quota / serialization errors */
     }
@@ -460,10 +470,10 @@ export default function OnboardingApp() {
       return;
     }
 
-    // Fallback: server resume unavailable — try the locally cached session for
-    // this same entity. (Different/expired sessions are ignored.)
+    // Fallback: server resume unavailable — try this entity's own cached
+    // session (per-entity key). (Different/expired sessions are ignored.)
     try {
-      const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || 'null');
+      const saved = JSON.parse(window.localStorage.getItem(sessionKey(entityId)) || 'null');
       if (saved && saved.state) {
         const sameEntity = saved.state.entity && saved.state.entity.id === entityId;
         if (sameEntity) {
@@ -485,6 +495,16 @@ export default function OnboardingApp() {
     try { hydrateOnce(); } finally { hydratedRef.current = true; }
     function hydrateOnce() {
     const p = new URLSearchParams(window.location.search);
+
+    // Module 1 sends ?fresh=1 when the user clicks "+" (create new entity).
+    // fresh and entity_id are mutually exclusive. Start clean: drop any saved
+    // pre-id draft so we never resume the last in-progress entity. Per-entity
+    // sessions (minty_onboarding_session:<id>) are left intact so other
+    // in-progress entities keep their saved progress.
+    const isFresh = p.get('fresh') === '1';
+    if (isFresh) {
+      try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+    }
 
     // Returning from the real Xero OAuth round-trip (Module 1 → Xero → here).
     // Restore the progress we stashed before leaving and land on the
@@ -578,11 +598,16 @@ export default function OnboardingApp() {
     }
 
     const urlToken = (p.get('token') || '').trim();
+    // No URL entity_id reached here (the resume branch above returns early), so
+    // this is the pre-id draft under the bare global key. On a fresh launch it
+    // was just cleared, so `saved` will be null and we start clean.
     let saved = null;
-    try {
-      saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || 'null');
-    } catch {
-      /* ignore corrupt storage */
+    if (!isFresh) {
+      try {
+        saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || 'null');
+      } catch {
+        /* ignore corrupt storage */
+      }
     }
     if (saved) {
       const savedClaims = readJwtClaims(saved.token);
@@ -1071,7 +1096,11 @@ export default function OnboardingApp() {
   // (which mints the JWT and forwards). Returns { ok, redirect } so
   // All Set can show errors / stay put.
   const finishOnboarding = async () => {
-    try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+    // Onboarding done — drop this entity's saved session (and any bare draft).
+    try {
+      window.localStorage.removeItem(sessionKey(state.entity.id));
+      window.localStorage.removeItem(STORAGE_KEY);
+    } catch { /* ignore */ }
     if (!token || !state.entity.id) return { ok: true, redirect: false };
     const chosen = state.modules[0]; // 'pettyCash' | 'bills' | undefined
     if (chosen !== 'bills') {
