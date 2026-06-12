@@ -57,14 +57,16 @@ const BACKEND_TO_FE_MODULE = { PETTY_CASH: 'pettyCash', BILL: 'bills' };
 // backend's own `current_step` is derived from a different ordering (modules →
 // Xero → petty-cash → bills/invite) than the FE flow (1 Basic, 2 Module,
 // 3 Invite, 4 Accounting/Xero, …), so we recompute against the FE order here
-// instead of trusting it as a raw index. Conservative: land on the earliest
-// step whose data isn't yet saved, never deep in a half-configured flow.
+// instead of trusting it as a raw index. Conservative: walk the FE steps in
+// order and land on the first one whose data isn't yet saved. We only consider
+// steps 1–4, because the resume payload doesn't carry petty-cash / bill detail,
+// so we can't tell whether those later steps are complete — never resume deeper
+// than "Connect to Accounting" (4) and let per-step GETs refill from there.
 function deriveResumeStep(s) {
-  const modules = Array.isArray(s.modules) ? s.modules : [];
-  if (modules.length === 0) return 2; // basic info done → Select Module
-  // Modules chosen but Xero not yet connected → Invite (3), then Xero (4).
-  if (!(s.xero && s.xero.connected)) return 3;
-  return 4; // connected → Accounting/Sales onward; per-step GETs refill details
+  for (const id of [1, 2, 3, 4]) {
+    if (!isStepComplete(id, s)) return id;
+  }
+  return 4;
 }
 
 const STEPS = [
@@ -444,27 +446,42 @@ export default function OnboardingApp() {
       const modules = (Array.isArray(payload.modules) ? payload.modules : [])
         .map((code) => BACKEND_TO_FE_MODULE[code])
         .filter(Boolean);
-      setState((prev) => ({
-        ...prev,
-        entity: {
-          ...prev.entity,
-          id: payload.entity_id,
-          // Keep FE display defaults when the server omits a field.
-          ...(payload.entity?.name ? { name: payload.entity.name } : {}),
-          ...(payload.entity?.country ? { country: payload.entity.country } : {}),
-          ...(payload.entity?.currency ? { currency: payload.entity.currency } : {}),
-        },
-        modules,
-        xero: payload.xero?.connected
-          ? { connected: true, org: payload.xero.org || prev.xero.org }
-          : prev.xero,
-        invites: Array.isArray(payload.invites) ? payload.invites : prev.invites,
-      }));
-      // Land on the FE step derived from saved data; use the backend's
-      // current_step/max_reached only as a floor (their index space differs).
-      const derived = deriveResumeStep(payload);
-      const landing = Math.max(derived, Number(payload.current_step) || 0, 1);
-      const ceiling = Math.max(landing, Number(payload.max_reached) || 0);
+      // Build the FE-shaped state once so the wizard and the resume-step
+      // derivation see exactly the same data (deriveResumeStep/isStepComplete
+      // read the FE `state` shape, not the raw backend payload).
+      let nextState;
+      setState((prev) => {
+        nextState = {
+          ...prev,
+          entity: {
+            ...prev.entity,
+            id: payload.entity_id,
+            // Keep FE display defaults when the server omits a field.
+            ...(payload.entity?.name ? { name: payload.entity.name } : {}),
+            ...(payload.entity?.country ? { country: payload.entity.country } : {}),
+            ...(payload.entity?.currency ? { currency: payload.entity.currency } : {}),
+          },
+          modules,
+          xero: payload.xero?.connected
+            ? { connected: true, org: payload.xero.org || prev.xero.org }
+            : prev.xero,
+          invites: Array.isArray(payload.invites) ? payload.invites : prev.invites,
+        };
+        return nextState;
+      });
+      // Land on the FE step derived from saved data — the first step whose data
+      // isn't complete. We do NOT use the backend's current_step as a forward
+      // floor: its index space differs and a stale/higher value would shove the
+      // user past an incomplete step (the bug where resume jumped straight to
+      // "Connect to Accounting"). current_step/max_reached only raise the
+      // ceiling so already-reached steps stay unlocked in the stepper.
+      const derived = deriveResumeStep(nextState);
+      const landing = Math.max(derived, 1);
+      const ceiling = Math.max(
+        landing,
+        Number(payload.current_step) || 0,
+        Number(payload.max_reached) || 0,
+      );
       setCurrent(landing);
       setMaxReached(ceiling);
       return;
