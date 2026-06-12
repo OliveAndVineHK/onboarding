@@ -405,9 +405,12 @@ export function StepConnectXero({ state, set, next, back, skip, connectXero, dis
         </button>
         <div className="step-actions">
           <SaveExitLink saveAndExit={saveAndExit} />
-          <button className="btn btn-primary" onClick={next}>
+          <button className="btn btn-primary" onClick={next} disabled={!connected}>
             Save &amp; Next <Icon.Arrow />
           </button>
+          {!connected && (
+            <div className="module-require">You must connect to Xero to continue.</div>
+          )}
         </div>
       </div>
     </>

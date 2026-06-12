@@ -188,7 +188,7 @@ function isStepComplete(id, state) {
     case 3:
       return true; // Invite is optional
     case 4:
-      return true; // Accounting is optional
+      return !!(state.xero && state.xero.connected); // Accounting connection is required
     case 5: {
       const b = state.pettyCash && state.pettyCash.openingBalance;
       return b !== undefined && b !== null && String(b).trim() !== '';

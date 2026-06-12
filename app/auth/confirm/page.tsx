@@ -5,6 +5,10 @@ import { useSearchParams } from "next/navigation";
 
 const FLASK_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
 const RESEND_COOLDOWN_SECONDS = 60;
+const CODE_TTL_SECONDS = 60;
+// Display hint only — NOT a security control. The backend enforces the real
+// 5-attempts/15-min lockout (returns HTTP 429); this local counter just shows
+// "X attempts remaining" and resets on refresh. Never gate real security on it.
 const MAX_ATTEMPTS = 5;
 
 const maskEmail = (email: string) => {
@@ -29,12 +33,19 @@ function ConfirmContent() {
   const [attemptsLeft, setAttemptsLeft] = useState(MAX_ATTEMPTS);
   const [resending, setResending] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  // Expiry of the current code: starts at 60s on load/resend, ticks to 0.
+  const [secondsLeft, setSecondsLeft] = useState(CODE_TTL_SECONDS);
+  // Server-enforced lockout after too many attempts (driven off the 429, not
+  // the local counter). Survives refresh because the backend keeps 429-ing.
+  const [locked, setLocked] = useState(false);
   const inputsRef = useRef<Array<HTMLInputElement | null>>([]);
 
   const code = digits.join("");
   const noAttempts = attemptsLeft === 0;
-  const canVerify = code.length === 6 && !verifying && !noAttempts;
-  const canResend = !resending && resendCooldown === 0;
+  const expired = secondsLeft <= 0;
+  const canVerify = code.length === 6 && !verifying && !noAttempts && !expired && !locked;
+  // Resend is offered once its cooldown elapses; the lockout disables it too.
+  const canResend = !resending && resendCooldown === 0 && !locked;
 
   // Resend cooldown — ticks down to 0 once Resend Code has been triggered.
   useEffect(() => {
@@ -42,6 +53,14 @@ function ConfirmContent() {
     const id = setTimeout(() => setResendCooldown((s: number) => s - 1), 1000);
     return () => clearTimeout(id);
   }, [resendCooldown]);
+
+  // Code-expiry countdown — ticks to 0, then Verify is disabled and the user
+  // must request a new code.
+  useEffect(() => {
+    if (secondsLeft <= 0) return;
+    const id = setTimeout(() => setSecondsLeft((s: number) => s - 1), 1000);
+    return () => clearTimeout(id);
+  }, [secondsLeft]);
 
   const onVerify = async () => {
     if (!canVerify) return;
@@ -60,10 +79,18 @@ function ConfirmContent() {
         }),
       });
       const data = await res.json().catch(() => ({}));
+      // Server lockout (5 wrong attempts → 15-min lockout). Authoritative and
+      // survives refresh/new session — lock the whole form and show the message.
+      if (res.status === 429) {
+        setLocked(true);
+        setError(data.message || "Too many attempts. Please try again later.");
+        setVerifying(false);
+        return;
+      }
       if (!res.ok || data.status === "error") {
-        // Decrement client-side attempts on any server-acknowledged failure.
-        // Network errors (catch branch) don't count — the user never actually
-        // submitted a wrong code in that case.
+        // 400: wrong / expired / already-used code. Decrement the local display
+        // counter on any server-acknowledged failure. Network errors (catch
+        // branch) don't count — no code was actually submitted then.
         setAttemptsLeft((a) => Math.max(0, a - 1));
         setError(data.message || "Verification failed.");
         setVerifying(false);
@@ -92,16 +119,26 @@ function ConfirmContent() {
         body: JSON.stringify({ email }),
       });
       const data = await res.json().catch(() => ({}));
+      // Requesting a new code does NOT reset the lockout — the backend still
+      // 429s. Keep the form locked and show the too-many-attempts message.
+      if (res.status === 429) {
+        setLocked(true);
+        setError(data.message || "Too many attempts. Please try again later.");
+        setResending(false);
+        return;
+      }
       if (!res.ok || data.status === "error") {
+        // 400 covers early-resend ("Please wait a moment…") and other failures.
         setError(data.message || "Could not resend the code. Please try again.");
         setResending(false);
         return;
       }
-      // Fresh code: clear the cells, refill attempts, kick off the cooldown
-      // so Resend can't be spammed.
+      // Fresh code: clear the cells, refill attempts, restart the expiry
+      // countdown, and kick off the cooldown so Resend can't be spammed.
       setDigits(["", "", "", "", "", ""]);
       setActiveIdx(0);
       setAttemptsLeft(MAX_ATTEMPTS);
+      setSecondsLeft(CODE_TTL_SECONDS);
       setResendCooldown(RESEND_COOLDOWN_SECONDS);
       setResending(false);
       inputsRef.current[0]?.focus();
@@ -182,6 +219,7 @@ function ConfirmContent() {
                 maxLength={1}
                 className={"otp-cell" + (i === activeIdx ? " is-active" : "")}
                 value={d}
+                disabled={locked}
                 onChange={(e) => setDigit(i, e.target.value)}
                 onFocus={() => setActiveIdx(i)}
                 onKeyDown={(e) => onKeyDown(i, e)}
@@ -200,11 +238,25 @@ function ConfirmContent() {
           </button>
           {error && <div className="auth-error" role="alert">{error}</div>}
 
-          {noAttempts && (
-            <div className="confirm-status" aria-live="polite">
+          <div className="confirm-status" aria-live="polite">
+            {locked ? (
+              <span className="confirm-status-warn">
+                Too many attempts — this account is temporarily locked. Please try again later.
+              </span>
+            ) : expired ? (
+              <span className="confirm-status-warn">Code expired — request a new one.</span>
+            ) : noAttempts ? (
               <span className="confirm-status-warn">No attempts left — please resend the code.</span>
-            </div>
-          )}
+            ) : (
+              <>
+                Code expires in{" "}
+                <span className="confirm-status-time">0:{String(secondsLeft).padStart(2, "0")}</span>
+                {attemptsLeft < MAX_ATTEMPTS && (
+                  <> · {attemptsLeft} attempt{attemptsLeft === 1 ? "" : "s"} remaining</>
+                )}
+              </>
+            )}
+          </div>
 
           <p className="confirm-resend">
             Didn&apos;t received the code?{" "}
