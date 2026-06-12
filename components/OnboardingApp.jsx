@@ -664,6 +664,31 @@ export default function OnboardingApp() {
       `&entity_name=${encodeURIComponent(state.entity.name || '')}`;
   };
 
+  // Disconnect Xero from the Accounting step. The entity stays in onboarding
+  // (still resumable); the backend revokes on Xero's side and clears the token.
+  // When run standalone (no entity/token), just flip local state so the
+  // prototype still works.
+  const disconnectXero = async () => {
+    if (!token || !state.entity.id) {
+      set({ xero: { connected: false, org: '' } });
+      return { ok: true };
+    }
+    const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
+    try {
+      const res = await fetch(`${base}/api/onboarding/xero/disconnect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ entity_id: state.entity.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: data.error || 'Failed to disconnect from Xero. Please try again.' };
+      set({ xero: { connected: false, org: '' } });
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'Could not reach the server. Please try again.' };
+    }
+  };
+
   // Create the entity in Module 1 (Step 1). Token-authenticated; no cookies.
   // When launched standalone (no token), it no-ops so the prototype still runs.
   const submitEntity = async () => {
@@ -1127,7 +1152,7 @@ export default function OnboardingApp() {
     r.style.setProperty('--accent-hover', ACCENT_DEFAULTS.accent);
   }, []);
 
-  const stepProps = { state, set, next, back, skip, restart, submitEntity, submitModule, connectXero, submitSalesMethods, fetchExistingSalesMethods, accountOptions, submitAccountCodes, submitContacts, createContact, submitBills, submitInvite, cancelInvite, finishOnboarding, saveAndExit };
+  const stepProps = { state, set, next, back, skip, restart, submitEntity, submitModule, connectXero, disconnectXero, submitSalesMethods, fetchExistingSalesMethods, accountOptions, submitAccountCodes, submitContacts, createContact, submitBills, submitInvite, cancelInvite, finishOnboarding, saveAndExit };
 
   return (
     <>

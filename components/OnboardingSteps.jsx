@@ -287,10 +287,23 @@ export function StepSelectModule({ state, set, next, back, skip, submitModule, s
 }
 
 // --- Step 3: Connect to Xero ---
-export function StepConnectXero({ state, set, next, back, skip, connectXero, saveAndExit }) {
+export function StepConnectXero({ state, set, next, back, skip, connectXero, disconnectXero, saveAndExit }) {
   const connected = state.xero.connected;
   const lastConnected = state.xero.lastConnected || '07 May 2026';
   const xeroEntity = state.xero.org || state.entity.name || 'Olive & Vine Inc';
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [disconnectError, setDisconnectError] = useState('');
+
+  const handleDisconnect = async () => {
+    if (disconnecting || typeof disconnectXero !== 'function') return;
+    setDisconnectError('');
+    setDisconnecting(true);
+    const result = await disconnectXero();
+    setDisconnecting(false);
+    if (!result?.ok) {
+      setDisconnectError(result?.error || 'Failed to disconnect from Xero. Please try again.');
+    }
+  };
   return (
     <>
       <div className="page-head" style={{ textAlign: 'center', maxWidth: 'none', marginBottom: 18 }}>
@@ -361,7 +374,21 @@ export function StepConnectXero({ state, set, next, back, skip, connectXero, sav
           >
             <Icon.Check /> Xero Connected
           </div>
-        ) : (
+        ) : null}
+        {connected && (
+          <>
+            <button
+              className="btn btn-ghost btn-block"
+              style={{ marginTop: 10 }}
+              onClick={handleDisconnect}
+              disabled={disconnecting}
+            >
+              {disconnecting ? 'Disconnecting…' : <><Icon.Link /> Disconnect from Xero</>}
+            </button>
+            {disconnectError && <div className="module-require" style={{ marginTop: 8 }}>{disconnectError}</div>}
+          </>
+        )}
+        {!connected && (
           <button
             className="btn btn-primary btn-block"
             style={{ marginTop: 16 }}
