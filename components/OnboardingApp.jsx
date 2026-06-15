@@ -71,6 +71,11 @@ function deriveResumeStep(s) {
     if (id === 3) return Array.isArray(s.invites) && s.invites.length > 0;
     return isStepComplete(id, s);
   };
+  // "Add later" with no invites: the user deferred inviting but wants to return.
+  // Resume on Invite (3) and don't let a later saved step (e.g. Xero) win.
+  if (s.inviteDeferred && !(Array.isArray(s.invites) && s.invites.length > 0)) {
+    return isStepComplete(1, s) && isStepComplete(2, s) ? 3 : isStepComplete(1, s) ? 2 : 1;
+  }
   let lastSaved = 1; // Basic Info is always the entry point.
   for (const id of [1, 2, 3, 4]) {
     if (isSaved(id)) {
@@ -189,6 +194,10 @@ const initialState = () => ({
     dedupe: true,
   },
   invites: [],
+  // Set when the user clicks "Add later" on the Invite step with no invites
+  // added — they advance now but want to come back to invite people. On resume
+  // (and only while invites is still empty) this lands them back on Invite.
+  inviteDeferred: false,
 });
 
 // Validation rules for completion gate
@@ -463,6 +472,17 @@ export default function OnboardingApp() {
       const modules = (Array.isArray(payload.modules) ? payload.modules : [])
         .map((code) => BACKEND_TO_FE_MODULE[code])
         .filter(Boolean);
+      // The backend /state payload doesn't carry the "Add later" deferral, so
+      // recover it from this entity's own cached session. It only matters while
+      // the user is still on the same device/browser, which is the normal
+      // re-entry case; the server's invites list stays authoritative.
+      let cachedDeferred = false;
+      try {
+        const cached = JSON.parse(window.localStorage.getItem(sessionKey(payload.entity_id)) || 'null');
+        cachedDeferred = !!(cached && cached.state && cached.state.inviteDeferred);
+      } catch {
+        /* ignore corrupt storage */
+      }
       // Build the FE-shaped state once so the wizard and the resume-step
       // derivation see exactly the same data (deriveResumeStep/isStepComplete
       // read the FE `state` shape, not the raw backend payload).
@@ -483,6 +503,7 @@ export default function OnboardingApp() {
             ? { connected: true, org: payload.xero.org || prev.xero.org }
             : prev.xero,
           invites: Array.isArray(payload.invites) ? payload.invites : prev.invites,
+          inviteDeferred: cachedDeferred,
         };
         return nextState;
       });

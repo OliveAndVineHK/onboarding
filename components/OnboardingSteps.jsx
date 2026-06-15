@@ -1299,7 +1299,7 @@ const ROLES = ['Admin', 'Accountant', 'Shop Manager', 'Cashier'];
 const roleToValue = (label) => (label || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
 const roleLabel = (value) => (value || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
-export function StepInvite({ state, set, next, back, skip, submitInvite, cancelInvite, saveAndExit }) {
+export function StepInvite({ state, set, next, back, submitInvite, cancelInvite, saveAndExit }) {
   const list = state.invites.filter((x) => x.email && x.email.includes('@'));
   const [form, setForm] = useState({ first: '', last: '', email: '', role: '' });
   const [toast, setToast] = useState(null);
@@ -1309,6 +1309,13 @@ export function StepInvite({ state, set, next, back, skip, submitInvite, cancelI
   // (right after Save & Next on Select Module) and again on "Skip for now".
   const [confirmSkip, setConfirmSkip] = useState(true);
   const [sending, setSending] = useState(false);
+  // Portal the modal to <body> so its fixed overlay can't be clipped to a
+  // transformed/overflow ancestor (which left the grey backdrop covering only
+  // part of the page on desktop). Guarded for SSR — body isn't there yet.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const setF = (k, v) => setForm({ ...form, [k]: v });
 
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email);
@@ -1472,16 +1479,22 @@ export function StepInvite({ state, set, next, back, skip, submitInvite, cancelI
         </button>
         <div className="step-actions">
           <SaveExitLink saveAndExit={saveAndExit} />
-          <button className="btn btn-link" onClick={skip}>
-            Skip for now <Icon.Skip />
-          </button>
-          <button className="btn btn-primary" onClick={next}>
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              // "Continue" (invites added) advances normally and clears any
+              // earlier deferral. "Add later" (no invites) flags the deferral so
+              // resume returns to this Invite step, then advances now.
+              set({ inviteDeferred: list.length === 0 });
+              next();
+            }}
+          >
             {list.length > 0 ? 'Continue' : 'Add later'} <Icon.Arrow />
           </button>
         </div>
       </div>
 
-      {confirmSkip && (
+      {confirmSkip && mounted && ReactDOM.createPortal(
         <div
           className="skip-modal-overlay"
           role="presentation"
@@ -1529,7 +1542,8 @@ export function StepInvite({ state, set, next, back, skip, submitInvite, cancelI
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
