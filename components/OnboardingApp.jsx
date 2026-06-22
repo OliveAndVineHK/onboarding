@@ -1145,7 +1145,9 @@ export default function OnboardingApp() {
   }, [current, token, state.entity.id]);
 
   // Commits the deferred opening balance (when petty cash was the
-  // selection) then redirects to the right module's landing page.
+  // selection) then redirects to the right module's landing page —
+  // petty cash lands on the opening page for the user's selected
+  // opening date, not the entity dashboard.
   // Bill-only users skip the opening-balance commit and go straight to
   // Module 2's Bills home via Module 1's /entity/<id>/bills handoff
   // (which mints the JWT and forwards). Returns { ok, redirect } so
@@ -1175,7 +1177,7 @@ export default function OnboardingApp() {
     } catch { /* ignore */ }
     const dest = chosen === 'bills'
       ? `${base}/entity/${state.entity.id}/bills`
-      : `${base}/entity/${state.entity.id}`;
+      : `${base}/report/opening?entity_id=${encodeURIComponent(state.entity.id)}&transaction_date=${encodeURIComponent(state.pettyCash.openingDate)}&from_onboarding=1`;
     window.location.href = dest;
     return { ok: true, redirect: true };
   };
