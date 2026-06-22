@@ -668,8 +668,20 @@ function PCSection({ title, fields, cardRef }) {
   );
 }
 
-export function StepSalesSetting({ state, set, next, back, skip, submitSalesMethods, fetchExistingSalesMethods, saveAndExit }) {
-  const stepSubmit = submitSalesMethods;
+export function StepSalesSetting({ state, set, next, back, skip, submitSalesMethods, submitOpeningBalance, fetchExistingSalesMethods, saveAndExit }) {
+  // Save everything on this step: sales methods AND the opening balance/date.
+  // submitOpeningBalance no-ops when the balance is empty, so a blank balance
+  // never blocks Save & Next / Save & Exit — we persist whatever's filled in.
+  // finishOnboarding re-submits the opening balance later; that's idempotent.
+  const stepSubmit = async () => {
+    const methodsResult = await submitSalesMethods();
+    if (!methodsResult?.ok) return methodsResult;
+    if (typeof submitOpeningBalance === 'function') {
+      const balanceResult = await submitOpeningBalance();
+      if (!balanceResult?.ok) return balanceResult;
+    }
+    return { ok: true };
+  };
   const p = state.pettyCash;
   const upd = (k, v) => set({ pettyCash: { ...p, [k]: v } });
   const balanceRef = useRef(null);
@@ -707,15 +719,14 @@ export function StepSalesSetting({ state, set, next, back, skip, submitSalesMeth
     }
     setShowBalanceError(false);
     if (saving) return;
-    // Opening balance/date is NOT saved here — it commits on the final "All Set"
-    // step so revisiting to change it doesn't seed a draft prematurely.
+    // Save everything on this step (sales methods + opening balance/date).
     if (typeof submitSalesMethods === 'function') {
       setSaveError('');
       setSaving(true);
-      const methodsResult = await submitSalesMethods();
+      const result = await stepSubmit();
       setSaving(false);
-      if (!methodsResult?.ok) {
-        setSaveError(methodsResult?.error || 'Failed to save. Please try again.');
+      if (!result?.ok) {
+        setSaveError(result?.error || 'Failed to save. Please try again.');
         return;
       }
     }
