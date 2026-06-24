@@ -750,7 +750,7 @@ export default function OnboardingApp() {
   // prototype still works.
   const disconnectXero = async () => {
     if (!token || !state.entity.id) {
-      set({ xero: { connected: false, org: '' } });
+      set({ xero: { ...state.xero, connected: false, org: '' } });
       return { ok: true };
     }
     const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
@@ -762,7 +762,7 @@ export default function OnboardingApp() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) return { ok: false, error: data.error || 'Failed to disconnect from Xero. Please try again.' };
-      set({ xero: { connected: false, org: '' } });
+      set({ xero: { ...state.xero, connected: false, org: '' } });
       return { ok: true };
     } catch {
       return { ok: false, error: 'Could not reach the server. Please try again.' };
