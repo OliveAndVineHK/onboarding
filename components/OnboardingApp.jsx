@@ -58,12 +58,31 @@ const BACKEND_TO_FE_MODULE = { PETTY_CASH: 'pettyCash', BILL: 'bills' };
 // Xero → petty-cash → bills/invite) than the FE flow (1 Basic, 2 Module,
 // 3 Invite, 4 Accounting/Xero, …), so we recompute against the FE order here
 // instead of trusting it as a raw index. We resume the user on the LAST step
-// they saved — the page they were on when they clicked "Save and Next" — rather
-// than the step after it. So we walk the FE steps in order and return the last
-// complete one. We only consider steps 1–4, because the resume payload doesn't
-// carry petty-cash / bill detail, so we can't judge those later steps; never
-// resume deeper than "Connect to Accounting" (4) and let per-step GETs refill.
-function deriveResumeStep(s) {
+// they saved — the page they were on when they clicked "Save and Next" / "Save
+// and Exit" — rather than the step after it.
+//
+// Backend contract: resume on the persisted `savedStep` (the FE step id the
+// user was on when they hit Save and Next / Save and Exit), with ONE override —
+// if savedStep > 4 but the DB says Xero isn't connected, send the user back to
+// step 4 "Connect to Accounting", since that connection gates every later step.
+//
+// `savedStep` may be null (never persisted — e.g. a session that predates this
+// field, or that never reached a Save). In that case we have no recorded
+// position, so we fall back to deriving one from the payload's own data
+// (entity / modules / invites / xero.connected), which only judges steps 1–4.
+function deriveResumeStep(s, savedStep) {
+  const xeroConnected = !!(s.xero && s.xero.connected);
+  const saved = Number(savedStep);
+
+  // Honour the backend's recorded step when present and in range.
+  if (Number.isFinite(saved) && saved >= 1 && saved <= 9) {
+    // The override: deeper than the accounting step requires a live Xero
+    // connection; without it, drop back to the gate at step 4.
+    if (saved > 4 && !xeroConnected) return 4;
+    return saved;
+  }
+
+  // No persisted step → derive from the data we do have (steps 1–4 only).
   // "Saved" per step. Invite (3) is optional, so isStepComplete always passes
   // it — but for resume we only count it as saved when invites were actually
   // added, otherwise saving at Module Selection would skip the user onto Invite.
@@ -71,11 +90,6 @@ function deriveResumeStep(s) {
     if (id === 3) return Array.isArray(s.invites) && s.invites.length > 0;
     return isStepComplete(id, s);
   };
-  // "Add later" with no invites: the user deferred inviting but wants to return.
-  // Resume on Invite (3) and don't let a later saved step (e.g. Xero) win.
-  if (s.inviteDeferred && !(Array.isArray(s.invites) && s.invites.length > 0)) {
-    return isStepComplete(1, s) && isStepComplete(2, s) ? 3 : isStepComplete(1, s) ? 2 : 1;
-  }
   let lastSaved = 1; // Basic Info is always the entry point.
   for (const id of [1, 2, 3, 4]) {
     if (isSaved(id)) {
@@ -194,10 +208,6 @@ const initialState = () => ({
     dedupe: true,
   },
   invites: [],
-  // Set when the user clicks "Add later" on the Invite step with no invites
-  // added — they advance now but want to come back to invite people. On resume
-  // (and only while invites is still empty) this lands them back on Invite.
-  inviteDeferred: false,
 });
 
 // Validation rules for completion gate
@@ -472,17 +482,6 @@ export default function OnboardingApp() {
       const modules = (Array.isArray(payload.modules) ? payload.modules : [])
         .map((code) => BACKEND_TO_FE_MODULE[code])
         .filter(Boolean);
-      // The backend /state payload doesn't carry the "Add later" deferral, so
-      // recover it from this entity's own cached session. It only matters while
-      // the user is still on the same device/browser, which is the normal
-      // re-entry case; the server's invites list stays authoritative.
-      let cachedDeferred = false;
-      try {
-        const cached = JSON.parse(window.localStorage.getItem(sessionKey(payload.entity_id)) || 'null');
-        cachedDeferred = !!(cached && cached.state && cached.state.inviteDeferred);
-      } catch {
-        /* ignore corrupt storage */
-      }
       // Build the FE-shaped state once so the wizard and the resume-step
       // derivation see exactly the same data (deriveResumeStep/isStepComplete
       // read the FE `state` shape, not the raw backend payload).
@@ -503,17 +502,17 @@ export default function OnboardingApp() {
             ? { connected: true, org: payload.xero.org || prev.xero.org }
             : prev.xero,
           invites: Array.isArray(payload.invites) ? payload.invites : prev.invites,
-          inviteDeferred: cachedDeferred,
         };
         return nextState;
       });
-      // Land on the FE step derived from saved data — the first step whose data
-      // isn't complete. We do NOT use the backend's current_step as a forward
-      // floor: its index space differs and a stale/higher value would shove the
-      // user past an incomplete step (the bug where resume jumped straight to
-      // "Connect to Accounting"). current_step/max_reached only raise the
-      // ceiling so already-reached steps stay unlocked in the stepper.
-      const derived = deriveResumeStep(nextState);
+      // Land on the FE step the backend persisted (`payload.saved_step`), with
+      // the Xero gate applied — deriveResumeStep handles the contract, including
+      // the null-saved_step fallback. We do NOT use the backend's `current_step`
+      // as a forward floor: its index space differs and a stale/higher value
+      // would shove the user past an incomplete step (the bug where resume
+      // jumped straight to "Connect to Accounting"). current_step/max_reached
+      // only raise the ceiling so already-reached steps stay unlocked.
+      const derived = deriveResumeStep(nextState, payload.saved_step);
       const landing = Math.max(derived, 1);
       const ceiling = Math.max(
         landing,
@@ -1194,6 +1193,20 @@ export default function OnboardingApp() {
       /* best-effort — never block the exit on a save failure */
     }
     const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
+    // Record the FE step the user is leaving from so a later resume can land
+    // them right back here (see deriveResumeStep). Best-effort: a failure here
+    // must never block the exit, and resume falls back to the derived step.
+    if (token && state.entity.id) {
+      try {
+        await fetch(`${base}/api/onboarding/saved-step`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ entity_id: state.entity.id, saved_step: current }),
+        });
+      } catch {
+        /* best-effort — ignore and exit anyway */
+      }
+    }
     window.location.href = `${base}/entity`;
   };
 

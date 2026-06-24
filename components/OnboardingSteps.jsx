@@ -1493,10 +1493,9 @@ export function StepInvite({ state, set, next, back, submitInvite, cancelInvite,
           <button
             className="btn btn-primary"
             onClick={() => {
-              // "Continue" (invites added) advances normally and clears any
-              // earlier deferral. "Add later" (no invites) flags the deferral so
-              // resume returns to this Invite step, then advances now.
-              set({ inviteDeferred: list.length === 0 });
+              // Both "Continue" (invites added) and "Add later" (no invites)
+              // just advance — "Add later" means "keep going", so resume never
+              // pins the user back to Invite.
               next();
             }}
           >
