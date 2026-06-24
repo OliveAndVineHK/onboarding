@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import Icon from './Icon';
 import NavMenu from './NavMenu';
 import {
@@ -62,24 +63,31 @@ const BACKEND_TO_FE_MODULE = { PETTY_CASH: 'pettyCash', BILL: 'bills' };
 // and Exit" — rather than the step after it.
 //
 // Backend contract: resume on the persisted `savedStep` (the FE step id the
-// user was on when they hit Save and Next / Save and Exit), with ONE override —
-// if savedStep > 4 but the DB says Xero isn't connected, send the user back to
-// step 4 "Connect to Accounting", since that connection gates every later step.
+// user was on when they hit Save and Next / Save and Exit).
+//
+// If savedStep > 4 but the DB says Xero isn't connected, we still LAND the user
+// on their saved step but flag `needsXero` — the caller shows a pop-up nudging
+// them back to step 4 "Connect to Accounting", since that connection gates every
+// later step. (We used to silently force step 4; now the user keeps their place
+// and is told why they must reconnect first.)
 //
 // `savedStep` may be null (never persisted — e.g. a session that predates this
 // field, or that never reached a Save). In that case we have no recorded
 // position, so we fall back to deriving one from the payload's own data
 // (entity / modules / invites / xero.connected), which only judges steps 1–4.
+//
+// Returns { step, needsXero }.
 function deriveResumeStep(s, savedStep) {
   const xeroConnected = !!(s.xero && s.xero.connected);
   const saved = Number(savedStep);
 
   // Honour the backend's recorded step when present and in range.
   if (Number.isFinite(saved) && saved >= 1 && saved <= 9) {
-    // The override: deeper than the accounting step requires a live Xero
-    // connection; without it, drop back to the gate at step 4.
-    if (saved > 4 && !xeroConnected) return 4;
-    return saved;
+    // Deeper than the accounting step requires a live Xero connection. Without
+    // it, keep the user on their saved step but flag that Xero is needed so the
+    // caller can prompt them back to step 4.
+    if (saved > 4 && !xeroConnected) return { step: saved, needsXero: true };
+    return { step: saved, needsXero: false };
   }
 
   // No persisted step → derive from the data we do have (steps 1–4 only).
@@ -102,7 +110,9 @@ function deriveResumeStep(s, savedStep) {
       break; // a required step isn't saved → land on the last saved one.
     }
   }
-  return lastSaved;
+  // The derived fallback only judges steps 1–4, so it can never land past the
+  // Xero gate — no need to flag needsXero here.
+  return { step: lastSaved, needsXero: false };
 }
 
 const STEPS = [
@@ -357,6 +367,14 @@ export default function OnboardingApp() {
   // Module 2 profile handoff URL (no entity context) passed in by Module 1.
   const [profileUrl, setProfileUrl] = useState('');
   const [accountOptions, setAccountOptions] = useState({ bank: [], cashSale: [], director: [], discrepancy: [], expense: [], contacts: [], bill: [] });
+  // Set on resume when the user landed past step 4 but Xero isn't connected in
+  // the DB — drives the "connect to accounting first" pop-up.
+  const [needsXeroPrompt, setNeedsXeroPrompt] = useState(false);
+  // Guard the portal for SSR — document.body isn't there during server render.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const activeIds = useMemo(() => getActiveStepIds(state.modules), [state.modules]);
   const displaySteps = useMemo(() => getDisplaySteps(state.modules), [state.modules]);
@@ -513,7 +531,7 @@ export default function OnboardingApp() {
       // jumped straight to "Connect to Accounting"). current_step/max_reached
       // only raise the ceiling so already-reached steps stay unlocked.
       const derived = deriveResumeStep(nextState, payload.saved_step);
-      const landing = Math.max(derived, 1);
+      const landing = Math.max(derived.step, 1);
       const ceiling = Math.max(
         landing,
         Number(payload.current_step) || 0,
@@ -521,6 +539,9 @@ export default function OnboardingApp() {
       );
       setCurrent(landing);
       setMaxReached(ceiling);
+      // Resumed past the Xero gate without a live connection — prompt the user
+      // back to step 4 (they keep their place; the pop-up routes them).
+      if (derived.needsXero) setNeedsXeroPrompt(true);
       return;
     }
 
@@ -1310,6 +1331,64 @@ export default function OnboardingApp() {
         {current === 8 && <StepBills {...stepProps} />}
         {current === 9 && <StepAllSet {...stepProps} />}
       </main>
+
+      {needsXeroPrompt && mounted && ReactDOM.createPortal(
+        <div
+          className="skip-modal-overlay"
+          role="presentation"
+          onClick={() => setNeedsXeroPrompt(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20,
+            background: 'rgba(15, 23, 27, 0.45)',
+          }}
+        >
+          <div
+            className="skip-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="xero-prompt-title"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#f1f3f4',
+              border: '1px solid var(--line)',
+              borderRadius: 'var(--radius)',
+              boxShadow: '0 20px 48px rgba(0, 0, 0, 0.22)',
+              padding: '26px 26px 22px',
+              maxWidth: 440,
+              width: '100%',
+            }}
+          >
+            <p id="xero-prompt-title" className="skip-modal-lead">
+              Connect to your accounting system first.
+            </p>
+            <p className="skip-modal-body" style={{ marginBottom: 32 }}>
+              You&apos;re not connected to Xero yet. Please go back to the
+              &ldquo;Connect to Accounting System&rdquo; step and connect before
+              continuing your setup.
+            </p>
+            <div className="skip-modal-actions" style={{ display: 'flex', justifyContent: 'center', gap: 10 }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  setNeedsXeroPrompt(false);
+                  setMaxReached((m) => Math.max(m, 4));
+                  setCurrent(4);
+                }}
+              >
+                Go to Connect step
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </>
   );
 }
