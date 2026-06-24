@@ -503,6 +503,14 @@ export default function OnboardingApp() {
       // Build the FE-shaped state once so the wizard and the resume-step
       // derivation see exactly the same data (deriveResumeStep/isStepComplete
       // read the FE `state` shape, not the raw backend payload).
+      // Rehydrate the petty-cash Sales Setting (step 5) from the backend so a
+      // cold resume doesn't show it blank. `sales_methods.{electronic,delivery}`
+      // mirror the POST /sales-methods payload; `opening_balance` carries the
+      // starting cash — read `opening_balance` first, falling back to
+      // `cash_addition` for seeded/legacy drafts that stored it there.
+      const sm = payload.sales_methods || {};
+      const ob = payload.opening_balance || {};
+      const obAmount = ob.opening_balance ?? ob.cash_addition;
       let nextState;
       setState((prev) => {
         nextState = {
@@ -520,6 +528,13 @@ export default function OnboardingApp() {
             ? { connected: true, org: payload.xero.org || prev.xero.org }
             : prev.xero,
           invites: Array.isArray(payload.invites) ? payload.invites : prev.invites,
+          pettyCash: {
+            ...prev.pettyCash,
+            ...(Array.isArray(sm.electronic) ? { electronicMethods: sm.electronic } : {}),
+            ...(Array.isArray(sm.delivery) ? { deliveryMethods: sm.delivery } : {}),
+            ...(ob.opening_date ? { openingDate: ob.opening_date } : {}),
+            ...(obAmount !== undefined && obAmount !== null ? { openingBalance: String(obAmount) } : {}),
+          },
         };
         return nextState;
       });
