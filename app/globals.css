@@ -1001,9 +1001,11 @@
   .invite-row-card:hover { border-color: color-mix(in oklab, var(--accent) 45%, var(--line)); }
   .invite-avatar { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, #00CBC6 0%, #00D5BF 100%); color: #fff; font-weight: 700; font-size: 14px; display: grid; place-items: center; flex-shrink: 0; }
   .invite-meta { flex: 1; min-width: 0; }
-  .invite-name { font-weight: 600; font-size: 14.5px; color: var(--ink); }
-  .invite-email { font-size: 13px; color: var(--muted); margin-top: 2px; }
-  .invite-role { font-size: 12.5px; font-weight: 600; color: var(--accent-ink); background: var(--accent-soft); padding: 5px 11px; border-radius: 999px; }
+  /* Truncate long names/emails so they can't push into the role pill and overlap. */
+  .invite-name { font-weight: 600; font-size: 14.5px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .invite-email { font-size: 13px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Keep the role pill at its natural size — never let flex squeeze it. */
+  .invite-role { flex-shrink: 0; font-size: 12.5px; font-weight: 600; color: var(--accent-ink); background: var(--accent-soft); padding: 5px 11px; border-radius: 999px; }
 
   /* Invite sent toast */
   .invite-toast {
