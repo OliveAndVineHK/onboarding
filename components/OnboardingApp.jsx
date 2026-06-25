@@ -392,13 +392,31 @@ export default function OnboardingApp() {
   };
 
   const set = (patch) => setState((prev) => ({ ...prev, ...patch }));
+
+  // Persist the FE step the user is now on as the resume position. Written on
+  // every advance (Save & Next) and on Save & Exit, so resume lands on the
+  // furthest step reached — this is what lets the Xero gate fire its pop-up when
+  // saved_step > 4 but Xero isn't connected. Best-effort: never block the UI.
+  const persistSavedStep = (step) => {
+    if (!token || !state.entity.id) return;
+    const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
+    try {
+      fetch(`${base}/api/onboarding/saved-step`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ entity_id: state.entity.id, saved_step: step }),
+      }).catch(() => {});
+    } catch {
+      /* best-effort — ignore */
+    }
+  };
+
   const next = () => {
     if (!isStepComplete(current, state)) return;
-    setCurrent((c) => {
-      const n = nextActiveId(c);
-      setMaxReached((m) => Math.max(m, n));
-      return n;
-    });
+    const n = nextActiveId(current);
+    setCurrent(n);
+    setMaxReached((m) => Math.max(m, n));
+    persistSavedStep(n);
   };
   // Dev-only skip: advances without validation (will be removed at the end)
   const skip = () => {
