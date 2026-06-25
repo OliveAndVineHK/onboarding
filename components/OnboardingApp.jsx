@@ -505,12 +505,14 @@ export default function OnboardingApp() {
       // read the FE `state` shape, not the raw backend payload).
       // Rehydrate the petty-cash Sales Setting (step 5) from the backend so a
       // cold resume doesn't show it blank. `sales_methods.{electronic,delivery}`
-      // mirror the POST /sales-methods payload; `opening_balance` carries the
-      // starting cash — read `opening_balance` first, falling back to
-      // `cash_addition` for seeded/legacy drafts that stored it there.
+      // mirror the POST /sales-methods payload. The beginning petty-cash amount
+      // lives in the draft's `opening_balance.opening_balance` (the inner field);
+      // `opening_balance.cash_addition` is now forced to 0 by the backend and
+      // must NOT be used. `opening_balance` (the object) is null when no draft
+      // exists yet.
       const sm = payload.sales_methods || {};
       const ob = payload.opening_balance || {};
-      const obAmount = ob.opening_balance ?? ob.cash_addition;
+      const obAmount = ob.opening_balance;
       let nextState;
       setState((prev) => {
         nextState = {
@@ -887,7 +889,9 @@ export default function OnboardingApp() {
         body: JSON.stringify({
           entity_id: state.entity.id,
           opening_date: p.openingDate,
-          cash_addition: p.openingBalance,
+          // Beginning petty-cash amount lives in opening_balance now (cash_addition
+          // is forced to 0 by the backend); send it here so save and resume agree.
+          opening_balance: p.openingBalance,
         }),
       });
       const data = await res.json().catch(() => ({}));
