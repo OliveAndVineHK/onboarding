@@ -68,15 +68,20 @@ export function StepCreateEntity({ state, set, next, skip, submitEntity, saveAnd
   const canNext = s.name.trim().length > 0 && phoneOk && emailOk;
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  // Set when the backend rejects the name as already-taken, so we can flag the
+  // Entity Name field and clear the flag as soon as the user edits the name.
+  const [nameTaken, setNameTaken] = useState(false);
 
   const handleNext = async () => {
     if (!canNext || saving) return;
     setSaveError('');
+    setNameTaken(false);
     if (typeof submitEntity === 'function') {
       setSaving(true);
       const result = await submitEntity();
       setSaving(false);
       if (!result?.ok) {
+        if (result?.duplicate) setNameTaken(true);
         setSaveError(result?.error || 'Failed to create entity. Please try again.');
         return;
       }
@@ -97,9 +102,29 @@ export function StepCreateEntity({ state, set, next, skip, submitEntity, saveAnd
         <p>Let&apos;s start by creating your first entity. It only takes a minute.</p>
       </div>
       <div className="form-stack">
-        <div className="field">
+        <div className={'field' + (nameTaken ? ' field-error' : '')}>
           <label>Entity Name</label>
-          <input type="text" name="organization" autoComplete="organization" placeholder="Please enter your company name" value={s.name} onChange={(e) => upd('name', e.target.value)} />
+          <input
+            type="text"
+            name="organization"
+            autoComplete="organization"
+            placeholder="Please enter your company name"
+            value={s.name}
+            aria-invalid={nameTaken}
+            onChange={(e) => {
+              // Editing the name clears the duplicate state entirely — both the
+              // field flag/message and the top banner — so neither lingers while
+              // the user is typing a new name.
+              if (nameTaken) {
+                setNameTaken(false);
+                setSaveError('');
+              }
+              upd('name', e.target.value);
+            }}
+          />
+          {nameTaken && (
+            <div className="field-required" role="alert">This entity name is already taken. Please choose a different name.</div>
+          )}
         </div>
         <div className="field">
           <label>Country</label>

@@ -874,7 +874,22 @@ export default function OnboardingApp() {
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) return { ok: false, error: data.error || 'Failed to create entity. Please try again.' };
+      if (!res.ok) {
+        // The backend returns 409 only for a name collision (uniqueness is
+        // GLOBAL across all users — see /api/onboarding/create). Key off the
+        // status, not the message: the body is {"error": "Entity name already
+        // exist"} with no machine code, and the wording could change. A 400 is
+        // a different validation failure (e.g. empty name), so pass it through.
+        const backendMsg = (data.error || data.message || '').toString();
+        if (res.status === 409) {
+          return {
+            ok: false,
+            duplicate: true,
+            error: `An entity named “${state.entity.name.trim()}” already exists. Please choose a different name.`,
+          };
+        }
+        return { ok: false, error: backendMsg || 'Failed to create entity. Please try again.' };
+      }
       if (data.entity_id) {
         setState((prev) => ({ ...prev, entity: { ...prev.entity, id: data.entity_id } }));
       }
@@ -955,7 +970,7 @@ export default function OnboardingApp() {
 
   const accountLoadedRef = useRef(false);
   useEffect(() => {
-    if ((current !== 5 && current !== 6) || accountLoadedRef.current) return;
+    if ((current !== 5 && current !== 6 && current !== 7) || accountLoadedRef.current) return;
     if (!token || !state.entity.id) return;
     accountLoadedRef.current = true;
     const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
