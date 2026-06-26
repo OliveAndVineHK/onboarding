@@ -32,7 +32,10 @@ function ConfirmContent() {
   const [error, setError] = useState("");
   const [attemptsLeft, setAttemptsLeft] = useState(MAX_ATTEMPTS);
   const [resending, setResending] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
+  // Resend is gated behind a 60s cooldown that starts on load (and restarts on
+  // each resend). With the code-expiry countdown removed, this is the only
+  // timer the user sees, so it begins counting down immediately.
+  const [resendCooldown, setResendCooldown] = useState(RESEND_COOLDOWN_SECONDS);
   // Expiry of the current code: starts at 60s on load/resend, ticks to 0.
   const [secondsLeft, setSecondsLeft] = useState(CODE_TTL_SECONDS);
   // Server-enforced lockout after too many attempts (driven off the 429, not
@@ -243,23 +246,17 @@ function ConfirmContent() {
               <span className="confirm-status-warn">
                 Too many attempts — this account is temporarily locked. Please try again later.
               </span>
-            ) : expired ? (
-              <span className="confirm-status-warn">Code expired — request a new one.</span>
             ) : noAttempts ? (
               <span className="confirm-status-warn">No attempts left — please resend the code.</span>
-            ) : (
+            ) : attemptsLeft < MAX_ATTEMPTS ? (
               <>
-                Code expires in{" "}
-                <span className="confirm-status-time">0:{String(secondsLeft).padStart(2, "0")}</span>
-                {attemptsLeft < MAX_ATTEMPTS && (
-                  <> · {attemptsLeft} attempt{attemptsLeft === 1 ? "" : "s"} remaining</>
-                )}
+                {attemptsLeft} attempt{attemptsLeft === 1 ? "" : "s"} remaining
               </>
-            )}
+            ) : null}
           </div>
 
           <p className="confirm-resend">
-            Didn&apos;t received the code?{" "}
+            Didn&apos;t receive the code?{" "}
             <a
               className="auth-link"
               href="#"
@@ -402,6 +399,11 @@ function ConfirmContent() {
           text-align: center;
           font-size: 14px;
           color: var(--muted);
+        }
+        .confirm-expired {
+          margin: 8px 0 0;
+          text-align: center;
+          font-size: 14px;
         }
         .auth-link {
           color: var(--accent-ink);
