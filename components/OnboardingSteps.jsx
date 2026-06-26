@@ -7,6 +7,7 @@ import Icon from './Icon';
 import MintySelect from './MintySelect';
 import MintyDatePicker from './MintyDatePicker';
 import Confetti from './Confetti';
+import ErrorBanner from './ErrorBanner';
 import { COUNTRY_OPTIONS, CURRENCY_OPTIONS } from '@/lib/entityOptions';
 
 // --- Reusable bits ---
@@ -89,6 +90,7 @@ export function StepCreateEntity({ state, set, next, skip, submitEntity, saveAnd
   };
   return (
     <>
+      <ErrorBanner message={saveError} onClose={() => setSaveError('')} />
       <div className="page-head">
         <img src="/assets/basic-info-cat.png" alt="" className="basic-info-cat" />
         <h2>Basic Information</h2>
@@ -117,11 +119,6 @@ export function StepCreateEntity({ state, set, next, skip, submitEntity, saveAnd
         </div>
       </div>
       <div className="cta-stack">
-        {saveError && (
-          <div className="module-require" role="alert" style={{ textAlign: 'center' }}>
-            {saveError}
-          </div>
-        )}
         <button className="btn btn-primary btn-block btn-jelly" disabled={!canNext || saving} onClick={handleNext}>
           {saving ? 'Saving…' : 'Save & Next'}
         </button>
@@ -213,6 +210,7 @@ export function StepSelectModule({ state, set, next, back, skip, submitModule, s
 
   return (
     <>
+      <ErrorBanner message={saveError} onClose={() => setSaveError('')} />
       <div className="page-head">
         <h2 className="module-title">
           Choose a module <FreeTrialPill heading ripple label="Beta Version" />
@@ -277,9 +275,11 @@ export function StepSelectModule({ state, set, next, back, skip, submitModule, s
             {saving ? 'Saving…' : <>Save &amp; Next <Icon.Arrow /></>}
           </button>
           {sel.length === 0 && (
-            <div className="module-require">You must pick a module to continue with your registration process.</div>
+            <div className="step-reminder" role="note">
+              <Icon.Info />
+              Pick a module to continue with your registration.
+            </div>
           )}
-          {saveError && <div className="module-require">{saveError}</div>}
         </div>
       </div>
     </>
@@ -306,6 +306,7 @@ export function StepConnectXero({ state, set, next, back, skip, connectXero, dis
   };
   return (
     <>
+      <ErrorBanner message={disconnectError} onClose={() => setDisconnectError('')} />
       <div className="page-head" style={{ textAlign: 'center', maxWidth: 'none', marginBottom: 18 }}>
         <h2 style={{ fontSize: 30, display: 'inline-flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
           <img src="/xero-logo.webp" alt="Xero" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
@@ -385,7 +386,6 @@ export function StepConnectXero({ state, set, next, back, skip, connectXero, dis
             >
               {disconnecting ? 'Disconnecting…' : <><Icon.Link /> Disconnect from Xero</>}
             </button>
-            {disconnectError && <div className="module-require" style={{ marginTop: 8 }}>{disconnectError}</div>}
           </>
         )}
         {!connected && (
@@ -409,7 +409,10 @@ export function StepConnectXero({ state, set, next, back, skip, connectXero, dis
             Save &amp; Next <Icon.Arrow />
           </button>
           {!connected && (
-            <div className="module-require">You must connect to Xero to continue.</div>
+            <div className="step-reminder" role="note">
+              <Icon.Info />
+              Connect to Xero to continue.
+            </div>
           )}
         </div>
       </div>
@@ -779,6 +782,7 @@ export function StepSalesSetting({ state, set, next, back, skip, submitSalesMeth
   };
   return (
     <>
+      <ErrorBanner message={saveError} onClose={() => setSaveError('')} />
       <div className="autofill-row">
         <button
           type="button"
@@ -868,7 +872,6 @@ export function StepSalesSetting({ state, set, next, back, skip, submitSalesMeth
           <button className="btn btn-primary" onClick={tryNext} disabled={saving}>
             {saving ? 'Saving…' : <>Save &amp; Next <Icon.Arrow /></>}
           </button>
-          {saveError && <div className="module-require">{saveError}</div>}
         </div>
       </div>
     </>
@@ -938,6 +941,7 @@ export function StepAccountCode({ state, set, next, back, skip, accountOptions, 
 
   return (
     <>
+      <ErrorBanner message={saveError} onClose={() => setSaveError('')} />
       <div className="page-head" style={{ textAlign: 'left', marginBottom: 18 }}>
         <h2 style={{ fontSize: 30 }}>Account Code Setting</h2>
         <p style={{ marginTop: 6 }}>Map each cash flow to the right account in your ledger — these settings need manual input from you.</p>
@@ -1056,7 +1060,6 @@ export function StepAccountCode({ state, set, next, back, skip, accountOptions, 
           <button className="btn btn-primary" onClick={tryNext} disabled={saving}>
             {saving ? 'Saving…' : <>Save &amp; Next <Icon.Arrow /></>}
           </button>
-          {saveError && <div className="module-require">{saveError}</div>}
         </div>
       </div>
     </>
@@ -1110,6 +1113,7 @@ export function StepOthers({ state, set, next, back, skip, accountOptions, submi
 
   return (
     <>
+      <ErrorBanner message={saveError} onClose={() => setSaveError('')} />
       <div className="page-head" style={{ textAlign: 'left', marginBottom: 22 }}>
         <h2 style={{ fontSize: 30 }}>Contact Setup</h2>
         <p style={{ marginTop: 6 }}>Choose the Xero contacts used for the director&apos;s account, cash sales, and cash discrepancy.</p>
@@ -1171,7 +1175,6 @@ export function StepOthers({ state, set, next, back, skip, accountOptions, submi
           <button className="btn btn-primary" onClick={tryNext} disabled={saving}>
             {saving ? 'Saving…' : <>Save &amp; Next <Icon.Arrow /></>}
           </button>
-          {saveError && <div className="module-require">{saveError}</div>}
         </div>
       </div>
     </>
@@ -1273,6 +1276,7 @@ export function StepBills({ state, set, next, back, skip, accountOptions, submit
 
   return (
     <>
+      <ErrorBanner message={saveError} onClose={() => setSaveError('')} />
       <div className="page-head" style={{ textAlign: 'left', marginBottom: 18 }}>
         <h2 style={{ fontSize: 30 }}>Bill Settings</h2>
         <p style={{ marginTop: 6 }}>Choose account code for expenses that will incur with supporting documents.</p>
@@ -1296,7 +1300,6 @@ export function StepBills({ state, set, next, back, skip, accountOptions, submit
           <button className="btn btn-primary" onClick={tryNext} disabled={saving}>
             {saving ? 'Saving…' : <>Save &amp; Next <Icon.Arrow /></>}
           </button>
-          {saveError && <div className="module-require">{saveError}</div>}
         </div>
       </div>
     </>
@@ -1331,13 +1334,24 @@ export function StepInvite({ state, set, next, back, submitInvite, cancelInvite,
     setMounted(true);
   }, []);
   const setF = (k, v) => setForm({ ...form, [k]: v });
+  // Show the "invalid email" hint only once the user has interacted with the
+  // field, so a pristine empty form doesn't start out shouting an error.
+  const [emailTouched, setEmailTouched] = useState(false);
 
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email);
-  const canSend = form.first.trim() && form.last.trim() && emailOk && form.role && !sending;
+  const emailInvalid = emailTouched && form.email.trim() !== '' && !emailOk;
+  // Don't gate the button on email format — let the user click Send and get an
+  // explicit banner explaining why, instead of a silently-disabled button.
+  const canSend = form.first.trim() && form.last.trim() && form.email.trim() && form.role && !sending;
 
   const send = async () => {
     if (!canSend) return;
     setError('');
+    if (!emailOk) {
+      setEmailTouched(true);
+      setError('Please enter a valid email address (e.g. user@domain.com).');
+      return;
+    }
     setSending(true);
     const sentEmail = form.email.trim();
     const result = await submitInvite({ email: sentEmail, role: roleToValue(form.role) });
@@ -1353,6 +1367,7 @@ export function StepInvite({ state, set, next, back, submitInvite, cancelInvite,
     ];
     set({ invites: nextList });
     setForm({ first: '', last: '', email: '', role: '' });
+    setEmailTouched(false);
     setToast({ id: Date.now(), email: sentEmail });
   };
 
@@ -1364,6 +1379,7 @@ export function StepInvite({ state, set, next, back, submitInvite, cancelInvite,
 
   const cancel = () => {
     setForm({ first: '', last: '', email: '', role: '' });
+    setEmailTouched(false);
     setError('');
   };
   const removeRow = async (i) => {
@@ -1381,6 +1397,7 @@ export function StepInvite({ state, set, next, back, submitInvite, cancelInvite,
 
   return (
     <>
+      <ErrorBanner message={error} onClose={() => setError('')} />
       <div className="page-head" style={{ textAlign: 'center', marginBottom: 18 }}>
         <h2 style={{ fontSize: 30 }}>User Invite</h2>
         <p style={{ marginTop: 6 }}>
@@ -1434,8 +1451,15 @@ export function StepInvite({ state, set, next, back, submitInvite, cancelInvite,
             <label>
               Email Address<span className="req">*</span>
             </label>
-            <div className="field">
-              <input type="email" placeholder="Enter email address" value={form.email} onChange={(e) => setF('email', e.target.value)} />
+            <div className={'field' + (emailInvalid ? ' field-error' : '')}>
+              <input
+                type="email"
+                placeholder="Enter email address"
+                value={form.email}
+                onChange={(e) => setF('email', e.target.value)}
+                onBlur={() => setEmailTouched(true)}
+                aria-invalid={emailInvalid}
+              />
             </div>
           </div>
           <div className="invite-field">
@@ -1444,12 +1468,6 @@ export function StepInvite({ state, set, next, back, submitInvite, cancelInvite,
             </label>
             <MintySelect value={form.role} onChange={(v) => setF('role', v)} options={ROLES} placeholder="Select a role" />
           </div>
-
-          {error && (
-            <div className="invite-error" role="alert" style={{ color: '#c0392b', fontSize: 13, marginTop: 4 }}>
-              {error}
-            </div>
-          )}
 
           <div className="invite-actions">
             <button type="button" className="btn btn-ghost btn-cancel" onClick={cancel}>
@@ -1590,6 +1608,7 @@ export function StepAllSet({ state, set, restart, finishOnboarding }) {
 
   return (
     <>
+      <ErrorBanner message={error} onClose={() => setError('')} />
       <Confetti count={42} />
       <div className="celebrate">
         <div className="check-circle">
@@ -1609,7 +1628,6 @@ export function StepAllSet({ state, set, restart, finishOnboarding }) {
         <button className="btn btn-primary" onClick={onContinue} disabled={finishing}>
           {finishing ? 'Saving…' : <>Continue with Minty <Icon.Arrow /></>}
         </button>
-        {error && <div className="module-require">{error}</div>}
       </div>
     </>
   );
