@@ -1092,7 +1092,7 @@ export default function OnboardingApp() {
 
   const billLoadedRef = useRef(false);
   useEffect(() => {
-    if (current !== 7 || billLoadedRef.current) return;
+    if (current !== 8 || billLoadedRef.current) return;
     if (!token || !state.entity.id) return;
     billLoadedRef.current = true;
     const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
