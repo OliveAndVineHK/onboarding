@@ -64,7 +64,7 @@ export function StepCreateEntity({ state, set, next, skip, submitEntity, saveAnd
   const emailOk = s.email.trim() === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.email);
   const phoneDigits = s.phone.replace(/\D/g, '');
   const phoneOk = phoneDigits.length === 0 || (phoneDigits.length >= 8 && phoneDigits.length <= 11);
-  const canNext = s.name.trim().length > 1 && phoneOk && emailOk;
+  const canNext = s.name.trim().length > 0 && phoneOk && emailOk;
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
