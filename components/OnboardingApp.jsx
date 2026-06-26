@@ -531,13 +531,6 @@ export default function OnboardingApp() {
       const sm = payload.sales_methods || {};
       const ob = payload.opening_balance || {};
       const obAmount = ob.opening_balance;
-      // TEMP DEBUG — remove after diagnosing step-5 resume blanking
-      console.log('[resume-debug] server payload hydration', {
-        saved_step: payload.saved_step,
-        sales_methods: sm,
-        opening_balance: ob,
-        obAmount,
-      });
       let nextState;
       setState((prev) => {
         nextState = {
@@ -687,13 +680,6 @@ export default function OnboardingApp() {
     // failure). This is what makes resume survive empty localStorage.
     const resumeEntityId = (p.get('entity_id') || '').trim();
     const resumeUrlToken = (p.get('token') || '').trim();
-    // TEMP DEBUG — remove after diagnosing step-5 resume blanking
-    console.log('[resume-debug] url params', {
-      entity_id: resumeEntityId,
-      hasToken: !!resumeUrlToken,
-      willHitServer: !!(resumeEntityId && resumeUrlToken),
-      rawSearch: window.location.search,
-    });
     if (resumeEntityId && resumeUrlToken) {
       setToken(resumeUrlToken);
       const rFirst = (p.get('first') || '').trim();
