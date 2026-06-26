@@ -1315,6 +1315,9 @@ export function StepInvite({ state, set, next, back, submitInvite, cancelInvite,
   const [form, setForm] = useState({ first: '', last: '', email: '', role: '' });
   const [toast, setToast] = useState(null);
   const [error, setError] = useState('');
+  // Rows whose long name/email is expanded (wrapped) instead of truncated.
+  const [expandedRows, setExpandedRows] = useState({});
+  const toggleExpanded = (key) => setExpandedRows((prev) => ({ ...prev, [key]: !prev[key] }));
   // Confirmation modal nudging the user to invite an accountant — the later
   // steps need expertise. Shown automatically on arrival at the Invite step
   // (right after Save & Next on Select Module) and again on "Skip for now".
@@ -1466,13 +1469,20 @@ export function StepInvite({ state, set, next, back, submitInvite, cancelInvite,
               const initials = hasName
                 ? `${(u.first[0] || '').toUpperCase()}${(u.last[0] || '').toUpperCase()}`
                 : (u.email[0] || '').toUpperCase();
+              const rowKey = u.id || u.email || i;
+              const expanded = !!expandedRows[rowKey];
               return (
-                <div className="invite-row-card" key={u.id || u.email || i}>
+                <div className="invite-row-card" key={rowKey}>
                   <div className="invite-avatar">{initials}</div>
-                  <div className="invite-meta">
+                  <button
+                    type="button"
+                    className={'invite-meta' + (expanded ? ' is-expanded' : '')}
+                    onClick={() => toggleExpanded(rowKey)}
+                    title={expanded ? 'Click to collapse' : 'Click to show full address'}
+                  >
                     <div className="invite-name">{hasName ? `${u.first} ${u.last}`.trim() : u.email}</div>
                     {hasName && <div className="invite-email">{u.email}</div>}
-                  </div>
+                  </button>
                   <span className="invite-role">{roleLabel(u.role)}</span>
                   <button type="button" className="icon-x" onClick={() => removeRow(i)} aria-label="Remove">
                     <Icon.Close />
