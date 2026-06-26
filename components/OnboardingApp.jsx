@@ -36,6 +36,34 @@ const STORAGE_KEY = 'minty_onboarding_session';
 // writes move to `minty_onboarding_session:<id>` and the bare draft is cleared.
 const sessionKey = (entityId) => (entityId ? `${STORAGE_KEY}:${entityId}` : STORAGE_KEY);
 
+// On a plain refresh the URL carries no entity_id, so we can't look up the
+// per-entity session key directly. Scan localStorage for every
+// `minty_onboarding_session:<id>` blob and return the most recently saved one
+// (by `savedAt`). This is what makes an ordinary refresh restore progress
+// instead of resetting to the empty initial state.
+const findLatestSession = () => {
+  if (typeof window === 'undefined') return null;
+  let best = null;
+  try {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (!key || !key.startsWith(`${STORAGE_KEY}:`)) continue;
+      let blob = null;
+      try {
+        blob = JSON.parse(window.localStorage.getItem(key) || 'null');
+      } catch {
+        continue;
+      }
+      if (!blob || !blob.state) continue;
+      const ts = typeof blob.savedAt === 'number' ? blob.savedAt : 0;
+      if (!best || ts > best.savedAt) best = { ...blob, savedAt: ts };
+    }
+  } catch {
+    return null;
+  }
+  return best;
+};
+
 // No signature verification — client-side cache invalidation only.
 function readJwtClaims(token) {
   if (!token) return null;
@@ -484,7 +512,7 @@ export default function OnboardingApp() {
       const key = sessionKey(state.entity.id);
       window.localStorage.setItem(
         key,
-        JSON.stringify({ current, maxReached, state, token, profileUrl, user }),
+        JSON.stringify({ current, maxReached, state, token, profileUrl, user, savedAt: Date.now() }),
       );
       // Once an id exists, the pre-id draft under the bare key is obsolete —
       // drop it so it can't be replayed by a later fresh load.
@@ -718,6 +746,11 @@ export default function OnboardingApp() {
       } catch {
         /* ignore corrupt storage */
       }
+      // No pre-id draft under the bare key? Once an entity exists the session
+      // moves to `minty_onboarding_session:<id>` (and the bare key is cleared),
+      // so an ordinary refresh — which has no entity_id in the URL — must fall
+      // back to the most recent per-entity session or it resets to zero.
+      if (!saved) saved = findLatestSession();
     }
     if (saved) {
       const savedClaims = readJwtClaims(saved.token);
