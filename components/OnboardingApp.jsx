@@ -398,6 +398,12 @@ export default function OnboardingApp() {
   // Set on resume when the user landed past step 4 but Xero isn't connected in
   // the DB — drives the "connect to accounting first" pop-up.
   const [needsXeroPrompt, setNeedsXeroPrompt] = useState(false);
+  // Set when the Xero OAuth round-trip returns `xero=mismatch` — the user logged
+  // in with a Xero account whose email differs from the onboarding initiator's,
+  // so the backend refused to connect the entity. Holds the email they MUST use
+  // (the initiator's, from the `expected` param) so the Accounting step can show
+  // a specific "use the account for X" message. Empty string = no mismatch.
+  const [xeroMismatch, setXeroMismatch] = useState('');
   // Guard the portal for SSR — document.body isn't there during server render.
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -667,6 +673,15 @@ export default function OnboardingApp() {
       });
       // The Xero tenant/org name reported back by Xero (real connected entity).
       const xeroOrg = (p.get('org') || '').trim();
+      // Wrong-account block: the backend refused to connect because the Xero
+      // login email didn't match the onboarding initiator. `expected` carries
+      // the email the user must log in with (URL-encoded). Record it so the
+      // Accounting step can message it; connection state stays false below.
+      if (xeroParam === 'mismatch') {
+        setXeroMismatch((p.get('expected') || '').trim() || 'unknown');
+      } else {
+        setXeroMismatch('');
+      }
       if (resumed) {
         if (resumed.token) setToken(resumed.token);
         if (resumed.profileUrl) setProfileUrl(resumed.profileUrl);
@@ -694,6 +709,7 @@ export default function OnboardingApp() {
         url.searchParams.delete('xero');
         url.searchParams.delete('step');
         url.searchParams.delete('org');
+        url.searchParams.delete('expected');
         window.history.replaceState({}, '', url.pathname + url.search + url.hash);
       } catch {
         /* ignore */
@@ -804,6 +820,9 @@ export default function OnboardingApp() {
   // Accounting step. When run standalone (no entity created), it simulates a
   // connection so the prototype still works.
   const connectXero = () => {
+    // Starting a fresh attempt clears any prior wrong-account banner so a retry
+    // doesn't show a stale "use the account for X" message.
+    setXeroMismatch('');
     const today = new Date().toLocaleDateString('en-GB', {
       day: '2-digit',
       month: 'short',
@@ -1350,7 +1369,7 @@ export default function OnboardingApp() {
     r.style.setProperty('--accent-hover', ACCENT_DEFAULTS.accent);
   }, []);
 
-  const stepProps = { state, set, next, back, skip, restart, submitEntity, submitModule, connectXero, disconnectXero, submitSalesMethods, submitOpeningBalance, fetchExistingSalesMethods, accountOptions, submitAccountCodes, submitContacts, createContact, submitBills, submitInvite, cancelInvite, finishOnboarding, saveAndExit };
+  const stepProps = { state, set, next, back, skip, restart, submitEntity, submitModule, connectXero, disconnectXero, xeroMismatch, clearXeroMismatch: () => setXeroMismatch(''), submitSalesMethods, submitOpeningBalance, fetchExistingSalesMethods, accountOptions, submitAccountCodes, submitContacts, createContact, submitBills, submitInvite, cancelInvite, finishOnboarding, saveAndExit };
 
   return (
     <>

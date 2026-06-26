@@ -312,12 +312,19 @@ export function StepSelectModule({ state, set, next, back, skip, submitModule, s
 }
 
 // --- Step 3: Connect to Xero ---
-export function StepConnectXero({ state, set, next, back, skip, connectXero, disconnectXero, saveAndExit }) {
+export function StepConnectXero({ state, set, next, back, skip, connectXero, disconnectXero, xeroMismatch, clearXeroMismatch, saveAndExit }) {
   const connected = state.xero.connected;
   const lastConnected = state.xero.lastConnected || '07 May 2026';
   const xeroEntity = state.xero.org || state.entity.name || 'Olive & Vine Inc';
   const [disconnecting, setDisconnecting] = useState(false);
   const [disconnectError, setDisconnectError] = useState('');
+  // Wrong-account block from the OAuth round-trip: `xeroMismatch` holds the
+  // email the user must log in with. Build a specific, actionable message.
+  const mismatchMessage = xeroMismatch
+    ? (xeroMismatch === 'unknown'
+        ? 'You connected with the wrong Xero account. Please use the Xero account tied to your onboarding email.'
+        : `You connected with the wrong Xero account. Please log in to Xero with ${xeroMismatch}.`)
+    : '';
 
   const handleDisconnect = async () => {
     if (disconnecting || typeof disconnectXero !== 'function') return;
@@ -332,6 +339,10 @@ export function StepConnectXero({ state, set, next, back, skip, connectXero, dis
   return (
     <>
       <ErrorBanner message={disconnectError} onClose={() => setDisconnectError('')} />
+      <ErrorBanner
+        message={mismatchMessage}
+        onClose={() => typeof clearXeroMismatch === 'function' && clearXeroMismatch()}
+      />
       <div className="page-head" style={{ textAlign: 'center', maxWidth: 'none', marginBottom: 18 }}>
         <h2 style={{ fontSize: 30, display: 'inline-flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
           <img src="/xero-logo.webp" alt="Xero" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
