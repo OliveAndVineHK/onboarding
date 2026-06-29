@@ -876,6 +876,84 @@ export default function OnboardingApp() {
     }
   };
 
+  // Re-validate the Xero connection against the backend (same DB-backed
+  // GET /api/onboarding/state that resumeFromServer reads), but lightweight:
+  // it reads ONLY xero.connected and reconciles that, without touching the
+  // current step or other in-session state. Used on an ordinary refresh, where
+  // we rehydrate from localStorage — which can carry a stale
+  // `xero.connected: true` from before a *different* user (e.g. the invitee)
+  // disconnected the entity from Xero on their own session. localStorage is
+  // per-browser, so the inviter's cache never sees that revocation; only the
+  // backend knows. Best-effort: a network/auth failure leaves the cached state
+  // untouched so a transient blip can't wipe a real connection. Returns the
+  // backend's connected boolean, or null if unknown.
+  const verifyXeroConnection = async () => {
+    if (!token || !state.entity.id) return null;
+    const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
+    try {
+      const res = await fetch(
+        `${base}/api/onboarding/state?entity_id=${encodeURIComponent(state.entity.id)}`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) return null;
+      const payload = await res.json().catch(() => null);
+      if (!payload) return null;
+      const connected = !!(payload.xero && payload.xero.connected);
+      setState((prev) => {
+        if (!!prev.xero.connected === connected) {
+          // Still matches: only refresh the org label if the backend has one.
+          return connected && payload.xero.org && payload.xero.org !== prev.xero.org
+            ? { ...prev, xero: { ...prev.xero, org: payload.xero.org } }
+            : prev;
+        }
+        // Connection state changed under us — reconcile to the backend.
+        return connected
+          ? { ...prev, xero: { ...prev.xero, connected: true, org: payload.xero.org || prev.xero.org } }
+          : { ...prev, xero: { ...prev.xero, connected: false, org: '' } };
+      });
+      return connected;
+    } catch {
+      return null; // transient failure → keep cached state
+    }
+  };
+
+  // Step 4 and every step after it depend on a live Xero connection, so each
+  // time we land on a step 4+ we re-check the backend (localStorage can be
+  // stale — see verifyXeroConnection). This catches a disconnect that happened
+  // on a *different* session (e.g. the invitee revoked Xero) whether it landed
+  // before this page loaded or while the user is mid-onboarding. If the
+  // connection was revoked, the fn flips local state to "Not connected"; when
+  // the user is *past* step 4 we also nudge them back via the existing
+  // needs-Xero prompt (the same modal cold resume uses, see needsXeroPrompt).
+  //
+  // Kept cheap so per-landing re-checks don't drag: (1) an in-flight latch so
+  // overlapping landings never fire a second concurrent /state fetch; (2) the
+  // fetch is background-only — never awaited by render, so it can't block
+  // paint; (3) verifyXeroConnection returns the SAME state object when nothing
+  // changed, so the common "still connected" case triggers no re-render.
+  const verifyingXeroRef = useRef(false);
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    if (current < 4) return;
+    if (!token || !state.entity.id) return;
+    if (verifyingXeroRef.current) return; // a check is already running
+    verifyingXeroRef.current = true;
+    let cancelled = false;
+    (async () => {
+      try {
+        const connected = await verifyXeroConnection();
+        if (cancelled) return;
+        if (connected === false && current > 4) setNeedsXeroPrompt(true);
+      } finally {
+        verifyingXeroRef.current = false;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current, token, state.entity.id]);
+
   // Create the entity in Module 1 (Step 1). Token-authenticated; no cookies.
   // When launched standalone (no token), it no-ops so the prototype still runs.
   const submitEntity = async () => {
