@@ -1208,7 +1208,18 @@ export default function OnboardingApp() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) return { ok: false, error: data.error || 'Failed to send invitation. Please try again.' };
-      return { ok: true, invitation: data.invitation };
+      // The invitation row can be created even when the email itself fails to
+      // go out (Brevo/SMTP error) — the backend signals that with
+      // email_sent: false. Pass it through so the UI can warn instead of
+      // showing a false "Invitation sent" success.
+      //
+      // Backends disagree on where email_sent lives: some put it at the top
+      // level ({ email_sent, invitation }), others nest it inside the
+      // invitation ({ invitation: { email_sent } }). Check both; only treat it
+      // as a failure when an explicit `false` is present in either spot.
+      const emailSentFlag =
+        data.email_sent ?? (data.invitation && data.invitation.email_sent);
+      return { ok: true, invitation: data.invitation, emailSent: emailSentFlag !== false };
     } catch {
       return { ok: false, error: 'Could not reach the server. Please try again.' };
     }
