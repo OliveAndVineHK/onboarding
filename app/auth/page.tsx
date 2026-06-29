@@ -22,6 +22,10 @@ function AuthContent() {
   const signupMode = searchParams.get("mode") === "signup";
   const prefilledFirstName = searchParams.get("fn") || "";
   const prefilledLastName = searchParams.get("ln") || "";
+  // Set by the backend when it bounces a wrong-account user back here after a
+  // forced logout (?error=wrong_account). The Flask flash explaining why can't
+  // cross origins to this page, so we reconstruct the message from the params.
+  const bouncedWrongAccount = searchParams.get("error") === "wrong_account";
   const [email, setEmail] = useState(prefilledEmail);
   // Self-serve signup collects the name up front (the User model requires a
   // first/last name). In login/invite mode these stay as the prefilled values.
@@ -34,6 +38,11 @@ function AuthContent() {
   const canContinue = emailValid && namesValid && !sending;
 
   const emailLocked = Boolean(inviteToken && prefilledEmail);
+  // Show the "sign in as <email>" notice whenever someone arrives from an
+  // invite with both the token and the target email — this covers a fresh
+  // invite click and the wrong-account bounce-back (the backend re-sends the
+  // same invite+email params after forcing a logout).
+  const showInviteNotice = Boolean(inviteToken && prefilledEmail);
 
   useEffect(() => {
     if (prefilledEmail) setEmail(prefilledEmail);
@@ -90,6 +99,23 @@ function AuthContent() {
                 : "Start your journey with us today."}
             </p>
           </div>
+
+          {showInviteNotice && (
+            <div className="auth-invite-notice" role="status">
+              {bouncedWrongAccount ? (
+                <>
+                  You&apos;re signed in with a different account. This invitation
+                  was sent to <strong>{prefilledEmail}</strong> — please sign in
+                  with that account to accept it.
+                </>
+              ) : (
+                <>
+                  This invitation was sent to <strong>{prefilledEmail}</strong>.
+                  Please sign in with that account to accept it.
+                </>
+              )}
+            </div>
+          )}
 
           <div className="form-stack auth-form">
             {signupMode && (
@@ -229,6 +255,19 @@ function AuthContent() {
           font-size: 13px;
           text-align: center;
           margin-top: -6px;
+        }
+        .auth-invite-notice {
+          font-size: 13.5px;
+          line-height: 1.5;
+          color: var(--ink-2);
+          background: var(--accent-soft);
+          border: 1px solid color-mix(in oklab, var(--accent) 30%, var(--line));
+          border-radius: var(--radius);
+          padding: 12px 14px;
+        }
+        .auth-invite-notice strong {
+          color: var(--ink);
+          font-weight: 600;
         }
         .auth-divider {
           display: flex;
