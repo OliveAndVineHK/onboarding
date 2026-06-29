@@ -1003,7 +1003,12 @@ export function StepAccountCode({ state, set, next, back, skip, accountOptions, 
               label: (
                 <>
                   Select Bank account in Xero that will record petty cash movement. You may need to first add a bank account in Xero.{' '}
-                  <a href="#" className="pc-link">
+                  <a
+                    href="https://my.xero.com/"
+                    className="pc-link"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     (Link)
                   </a>
                 </>
