@@ -1396,6 +1396,14 @@ export function StepInvite({ state, set, next, back, submitInvite, cancelInvite,
       setError(result.error || 'Failed to send invitation.');
       return;
     }
+    // If the backend couldn't actually send the email (Brevo/SMTP failure →
+    // email_sent: false), treat the invite as failed: surface an error and do
+    // NOT add it to the pending list — the invitee received nothing. The form
+    // is left filled so the user can retry without re-typing.
+    if (result.emailSent === false) {
+      setError(`The invitation email to ${sentEmail} could not be sent. Please try again or contact support.`);
+      return;
+    }
     const inv = result.invitation || {};
     const nextList = [
       ...list,
@@ -1404,14 +1412,6 @@ export function StepInvite({ state, set, next, back, submitInvite, cancelInvite,
     set({ invites: nextList });
     setForm({ first: '', last: '', email: '', role: '' });
     setEmailTouched(false);
-    // The invitation row was created, but if the backend couldn't actually send
-    // the email (Brevo/SMTP failure → email_sent: false), don't show the
-    // "Invitation sent" success toast — surface an error so the user knows the
-    // invitee won't receive anything.
-    if (result.emailSent === false) {
-      setError(`Invitation created, but the email to ${sentEmail} could not be sent. Please try again or contact support.`);
-      return;
-    }
     setToast({ id: Date.now(), email: sentEmail });
   };
 
