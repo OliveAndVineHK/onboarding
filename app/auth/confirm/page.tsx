@@ -3,7 +3,14 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-const FLASK_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
+// Same Flask backend as the onboarding API — use NEXT_PUBLIC_MODULE1_API_URL
+// (what the rest of the app uses), falling back to the legacy NEXT_PUBLIC_API_URL
+// so existing builds keep working. Avoids the silent localhost fallback that
+// broke the OTP request/verify calls when NEXT_PUBLIC_API_URL was unset.
+const FLASK_BASE =
+  process.env.NEXT_PUBLIC_MODULE1_API_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:5001";
 const RESEND_COOLDOWN_SECONDS = 60;
 const CODE_TTL_SECONDS = 60;
 // Display hint only — NOT a security control. The backend enforces the real

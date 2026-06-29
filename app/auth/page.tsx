@@ -3,7 +3,16 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-const FLASK_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
+// Same Flask backend as the onboarding API (/api/onboarding/*, /auth/email/*,
+// /xero_auth all live there), so use the same env var the rest of the app uses
+// — NEXT_PUBLIC_MODULE1_API_URL. NEXT_PUBLIC_API_URL is kept only as a
+// backward-compatible fallback for builds that still set the old var; without
+// this, an unset NEXT_PUBLIC_API_URL silently fell back to localhost and broke
+// the Xero/OTP buttons in deployed environments.
+const FLASK_BASE =
+  process.env.NEXT_PUBLIC_MODULE1_API_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:5001";
 
 function AuthContent() {
   const router = useRouter();
