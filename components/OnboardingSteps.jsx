@@ -468,6 +468,35 @@ const CURRENCY_CODES = {
 };
 const currencyCode = (c) => CURRENCY_CODES[c] || (c || '').split(' ')[0];
 
+// --- Opening-balance amount handling (mirrors the bill amount field) ---
+// Amount is kept as text and formatted by pure string work — never parseFloat —
+// so the number entered is preserved exactly, and grouped as xxx,xxx,xxx.xx.
+const MAX_BALANCE_INT_DIGITS = 12; // digits allowed before the decimal point
+
+const cleanAmount = (raw) => String(raw ?? '').trim().replace(/,/g, '');
+const amountIntDigits = (cleaned) => (cleaned.split('.')[0] || '').length;
+
+// Format as xxx,xxx,xxx.xx via string grouping (no parseFloat). '' when blank.
+function formatBalance(value) {
+  const cleaned = cleanAmount(value);
+  if (!cleaned || cleaned === '.') return '';
+  const [intRaw = '', decRaw = ''] = cleaned.split('.');
+  let intPart = intRaw.replace(/^0+(?=\d)/, '');
+  if (intPart === '') intPart = '0';
+  const dec = (decRaw + '00').slice(0, 2);
+  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return `${grouped}.${dec}`;
+}
+
+// Live error when there are more than 12 digits before the decimal point, or ''.
+// Tied to the current value so it clears itself as soon as the amount is valid.
+function balanceLimitError(raw) {
+  if (amountIntDigits(cleanAmount(raw)) > MAX_BALANCE_INT_DIGITS) {
+    return `You can only enter up to ${MAX_BALANCE_INT_DIGITS} digits before the decimal point.`;
+  }
+  return '';
+}
+
 function MethodList({ title, methods, placeholder = 'Enter method name', onAdd, onChange, autoFilled = false }) {
   const [open, setOpen] = useState(true);
   const [adding, setAdding] = useState(false);
@@ -725,6 +754,7 @@ export function StepSalesSetting({ state, set, next, back, skip, submitSalesMeth
   const upd = (k, v) => set({ pettyCash: { ...p, [k]: v } });
   const balanceRef = useRef(null);
   const [showBalanceError, setShowBalanceError] = useState(false);
+  const [balanceLimitMsg, setBalanceLimitMsg] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const balanceEmpty = p.openingBalance === undefined || p.openingBalance === null || String(p.openingBalance).trim() === '';
@@ -787,6 +817,18 @@ export function StepSalesSetting({ state, set, next, back, skip, submitSalesMeth
       return;
     }
     setShowBalanceError(false);
+    const limitMsg = balanceLimitError(p.openingBalance);
+    if (limitMsg) {
+      setBalanceLimitMsg(limitMsg);
+      requestAnimationFrame(() => {
+        if (balanceRef.current) {
+          balanceRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const input = balanceRef.current.querySelector('input');
+          if (input) input.focus({ preventScroll: true });
+        }
+      });
+      return;
+    }
     if (dateIsFuture) {
       setShowDateError(true);
       requestAnimationFrame(() => {
@@ -919,25 +961,46 @@ export function StepSalesSetting({ state, set, next, back, skip, submitSalesMeth
             />
             {showDateError && dateIsFuture && <div className="field-required">You can&apos;t select a future date</div>}
           </div>
-          <div className={'pc-field' + (showBalanceError && balanceEmpty ? ' field-error' : '')}>
+          <div className={'pc-field' + ((showBalanceError && balanceEmpty) || balanceLimitMsg ? ' field-error' : '')}>
             <div className="pc-sub">Choose the beginning petty cash balance of the day</div>
             <div className="field">
               <div className="input-prefix">
                 <div className="prefix">{currencyCode(state.entity.currency)}</div>
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   placeholder="0.00"
                   value={p.openingBalance ?? ''}
                   onChange={(e) => {
-                    upd('openingBalance', e.target.value);
-                    if (e.target.value.trim() !== '') setShowBalanceError(false);
+                    let value = e.target.value;
+                    const cleanValue = value.replace(/,/g, '');
+                    // Allow only digits and one decimal point
+                    if (!/^\d*\.?\d*$/.test(cleanValue)) return;
+                    // Keep at most 2 decimal places
+                    if (cleanValue.includes('.')) {
+                      const parts = cleanValue.split('.');
+                      value = parts[1] && parts[1].length > 2
+                        ? parts[0] + '.' + parts[1].substring(0, 2)
+                        : cleanValue;
+                    } else {
+                      value = cleanValue;
+                    }
+                    upd('openingBalance', value);
+                    if (value.trim() !== '') setShowBalanceError(false);
+                    // Show the 12-digit limit error only while it applies; clear
+                    // it the moment the amount is valid again so it doesn't stick.
+                    setBalanceLimitMsg(balanceLimitError(value));
+                  }}
+                  onBlur={(e) => {
+                    const formatted = formatBalance(e.target.value);
+                    upd('openingBalance', formatted);
+                    setBalanceLimitMsg(balanceLimitError(formatted));
                   }}
                 />
               </div>
             </div>
             {showBalanceError && balanceEmpty && <div className="field-required">This is a required field</div>}
+            {balanceLimitMsg && <div className="field-required">{balanceLimitMsg}</div>}
           </div>
         </div>
       </div>
@@ -1438,7 +1501,12 @@ export function StepInvite({ state, set, next, back, submitInvite, cancelInvite,
     }
     setSending(true);
     const sentEmail = form.email.trim();
-    const result = await submitInvite({ email: sentEmail, role: roleToValue(form.role) });
+    const result = await submitInvite({
+      email: sentEmail,
+      role: roleToValue(form.role),
+      first: form.first.trim(),
+      last: form.last.trim(),
+    });
     setSending(false);
     if (!result.ok) {
       setError(result.error || 'Failed to send invitation.');

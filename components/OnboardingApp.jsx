@@ -581,7 +581,17 @@ export default function OnboardingApp() {
           xero: payload.xero?.connected
             ? { connected: true, org: payload.xero.org || prev.xero.org }
             : prev.xero,
-          invites: Array.isArray(payload.invites) ? payload.invites : prev.invites,
+          // Backend invites carry snake_case first_name/last_name; map them to
+          // the FE first/last shape so resumed cards keep the name+email format.
+          invites: Array.isArray(payload.invites)
+            ? payload.invites.map((inv) => ({
+                id: inv.id,
+                email: inv.email,
+                role: inv.role,
+                first: inv.first_name || inv.first || '',
+                last: inv.last_name || inv.last || '',
+              }))
+            : prev.invites,
           pettyCash: {
             ...prev.pettyCash,
             ...(Array.isArray(sm.electronic) ? { electronicMethods: sm.electronic } : {}),
@@ -1054,7 +1064,8 @@ export default function OnboardingApp() {
           opening_date: p.openingDate,
           // Beginning petty-cash amount lives in opening_balance now (cash_addition
           // is forced to 0 by the backend); send it here so save and resume agree.
-          opening_balance: p.openingBalance,
+          // Strip the display grouping commas so the backend gets a clean number.
+          opening_balance: String(p.openingBalance).replace(/,/g, ''),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -1274,15 +1285,15 @@ export default function OnboardingApp() {
     }
   };
 
-  const submitInvite = async ({ email, role }) => {
+  const submitInvite = async ({ email, role, first, last }) => {
     // Standalone prototype (no Module 1 handoff): keep the invite local-only.
-    if (!token || !state.entity.id) return { ok: true, invitation: { email, role } };
+    if (!token || !state.entity.id) return { ok: true, invitation: { email, role, first_name: first, last_name: last } };
     const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
     try {
       const res = await fetch(`${base}/api/onboarding/invite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ entity_id: state.entity.id, email, role }),
+        body: JSON.stringify({ entity_id: state.entity.id, email, role, first_name: first, last_name: last }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) return { ok: false, error: data.error || 'Failed to send invitation. Please try again.' };
@@ -1333,8 +1344,9 @@ export default function OnboardingApp() {
       .then((data) => {
         if (!data || !Array.isArray(data.invitations)) return;
         setState((prev) => {
-          // Keep any names typed this session (backend stores only email/role),
-          // matching by email; fall back to email-derived initials otherwise.
+          // Names are persisted server-side now, so prefer the backend values;
+          // fall back to any names typed this session (matched by email) for
+          // legacy invites created before names were stored.
           const known = {};
           (prev.invites || []).forEach((x) => {
             if (x.email) known[x.email.toLowerCase()] = x;
@@ -1345,8 +1357,8 @@ export default function OnboardingApp() {
               id: inv.id,
               email: inv.email,
               role: inv.role,
-              first: prior.first || '',
-              last: prior.last || '',
+              first: inv.first_name || prior.first || '',
+              last: inv.last_name || prior.last || '',
             };
           });
           return { ...prev, invites };
