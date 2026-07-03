@@ -319,8 +319,20 @@
     text-align: left;
     width: 100%;
     user-select: none;
+    cursor: pointer;
     transition: background .15s ease, border-color .15s ease, color .15s ease;
   }
+  .pc-side-item:hover:not(:disabled):not(.active) {
+    border-color: color-mix(in oklab, var(--accent) 55%, var(--line-strong));
+    color: var(--ink);
+  }
+  .pc-side-item:disabled {
+    cursor: default;
+    opacity: 0.55;
+  }
+  /* The current sub-step is disabled (no-op self-navigation) but must still
+     read as the active step, not a dimmed one. */
+  .pc-side-item.active:disabled { opacity: 1; }
   .pc-side-item.active {
     background: #46D8CC;
     border-color: transparent;

@@ -1572,18 +1572,30 @@ export default function OnboardingApp() {
         {(current === 5 || current === 6 || current === 7) && (
           <aside className="pc-side-menu" aria-label="Petty Cash sub-steps">
             <div className="pc-side-title">Petty Cash Settings</div>
-            <div className={'pc-side-item' + (current === 5 ? ' active' : '') + (current > 5 ? ' done' : '')}>
-              <span className="substep-circle">{current > 5 ? <Icon.CheckSm /> : '1'}</span>
-              <span className="substep-label">Sales</span>
-            </div>
-            <div className={'pc-side-item' + (current === 6 ? ' active' : '') + (current > 6 ? ' done' : '')}>
-              <span className="substep-circle">{current > 6 ? <Icon.CheckSm /> : '2'}</span>
-              <span className="substep-label">Account Code</span>
-            </div>
-            <div className={'pc-side-item' + (current === 7 ? ' active' : '') + (current > 7 ? ' done' : '')}>
-              <span className="substep-circle">{current > 7 ? <Icon.CheckSm /> : '3'}</span>
-              <span className="substep-label">Others</span>
-            </div>
+            {[
+              { id: 5, num: '1', label: 'Sales' },
+              { id: 6, num: '2', label: 'Account Code' },
+              { id: 7, num: '3', label: 'Others' },
+            ].map(({ id, num, label }) => {
+              // A sub-step is reachable once the user has been there. Forward
+              // jumps to an incomplete step are still blocked inside goto(), so
+              // clicking a not-yet-eligible item is a safe no-op; we disable it
+              // here too so the cursor/affordance matches.
+              const reachable = id <= maxReached;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  className={'pc-side-item' + (current === id ? ' active' : '') + (current > id ? ' done' : '')}
+                  onClick={() => goto(id)}
+                  disabled={!reachable || current === id}
+                  aria-current={current === id ? 'step' : undefined}
+                >
+                  <span className="substep-circle">{current > id ? <Icon.CheckSm /> : num}</span>
+                  <span className="substep-label">{label}</span>
+                </button>
+              );
+            })}
           </aside>
         )}
         {current === 1 && <StepCreateEntity {...stepProps} />}
