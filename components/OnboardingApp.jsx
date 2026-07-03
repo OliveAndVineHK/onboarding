@@ -408,6 +408,10 @@ export default function OnboardingApp() {
   // Set on resume when the user landed past step 4 but Xero isn't connected in
   // the DB — drives the "connect to accounting first" pop-up.
   const [needsXeroPrompt, setNeedsXeroPrompt] = useState(false);
+  // Why the needs-Xero pop-up is showing: 'not-connected' (the entity isn't
+  // connected in the DB) or 'expired' (the /state re-check came back 401 — the
+  // session lapsed, typically after ~30 min past step 4). Drives the modal copy.
+  const [xeroPromptReason, setXeroPromptReason] = useState('not-connected');
   // Set when the Xero OAuth round-trip returns `xero=mismatch` — the user logged
   // in with a Xero account whose email differs from the onboarding initiator's,
   // so the backend refused to connect the entity. Holds the email they MUST use
@@ -631,7 +635,10 @@ export default function OnboardingApp() {
       setMaxReached(ceiling);
       // Resumed past the Xero gate without a live connection — prompt the user
       // back to step 4 (they keep their place; the pop-up routes them).
-      if (derived.needsXero) setNeedsXeroPrompt(true);
+      if (derived.needsXero) {
+        setXeroPromptReason('not-connected');
+        setNeedsXeroPrompt(true);
+      }
       return;
     }
 
@@ -907,7 +914,9 @@ export default function OnboardingApp() {
   // per-browser, so the inviter's cache never sees that revocation; only the
   // backend knows. Best-effort: a network/auth failure leaves the cached state
   // untouched so a transient blip can't wipe a real connection. Returns the
-  // backend's connected boolean, or null if unknown.
+  // backend's connected boolean, the string 'expired' when the session token
+  // was rejected (401 — the caller nudges the user to reconnect), or null if
+  // unknown.
   const verifyXeroConnection = async () => {
     if (!token || !state.entity.id) return null;
     const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
@@ -916,6 +925,10 @@ export default function OnboardingApp() {
         `${base}/api/onboarding/state?entity_id=${encodeURIComponent(state.entity.id)}`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
+      // 401 → the session token lapsed (typically ~30 min past step 4). Surface
+      // it distinctly so the caller can show the "reconnect" prompt rather than
+      // silently swallowing it as a transient blip.
+      if (res.status === 401) return 'expired';
       if (!res.ok) return null;
       const payload = await res.json().catch(() => null);
       if (!payload) return null;
@@ -964,7 +977,16 @@ export default function OnboardingApp() {
       try {
         const connected = await verifyXeroConnection();
         if (cancelled) return;
-        if (connected === false && current > 4) setNeedsXeroPrompt(true);
+        if (current > 4) {
+          if (connected === 'expired') {
+            // Session lapsed under us — nudge the user to reconnect.
+            setXeroPromptReason('expired');
+            setNeedsXeroPrompt(true);
+          } else if (connected === false) {
+            setXeroPromptReason('not-connected');
+            setNeedsXeroPrompt(true);
+          }
+        }
       } finally {
         verifyingXeroRef.current = false;
       }
@@ -1642,12 +1664,14 @@ export default function OnboardingApp() {
             }}
           >
             <p id="xero-prompt-title" className="skip-modal-lead">
-              Connect to your accounting system first.
+              {xeroPromptReason === 'expired'
+                ? 'Your session has timed out.'
+                : 'Connect to your accounting system first.'}
             </p>
             <p className="skip-modal-body" style={{ marginBottom: 32 }}>
-              You&apos;re not connected to Xero yet. Please go back to the
-              &ldquo;Connect to Accounting System&rdquo; step and connect before
-              continuing your setup.
+              {xeroPromptReason === 'expired'
+                ? 'It has been more than 30 minutes, so your connection to Xero has expired. Please go back to the “Connect to Accounting System” step and reconnect to continue your setup.'
+                : 'You’re not connected to Xero yet. Please go back to the “Connect to Accounting System” step and connect before continuing your setup.'}
             </p>
             <div className="skip-modal-actions" style={{ display: 'flex', justifyContent: 'center', gap: 10 }}>
               <button
@@ -1659,7 +1683,7 @@ export default function OnboardingApp() {
                   setCurrent(4);
                 }}
               >
-                Go to Connect step
+                {xeroPromptReason === 'expired' ? 'Reconnect to Xero' : 'Go to Connect step'}
               </button>
             </div>
           </div>
