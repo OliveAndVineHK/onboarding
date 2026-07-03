@@ -14,17 +14,42 @@ import { COUNTRY_OPTIONS, CURRENCY_OPTIONS } from '@/lib/entityOptions';
 // The stored value (state.pettyCash.openingBalance) is always a plain numeric
 // string (e.g. "1234.5") so the submit payload stays clean. Display adds commas
 // every three digits with two decimal places (e.g. "1,234.50"); the placeholder
-// shows the default shape "000,000,000.00".
+// shows "0.00" when the field is empty.
+
+// Maximum allowed opening balance: 99 billion.
+const OPENING_BALANCE_MAX = 99000000000;
+
+// Compare a numeric string against OPENING_BALANCE_MAX without going through
+// Number() (which loses precision past ~15 digits). Returns true if raw > max.
+function exceedsBalanceMax(raw) {
+  const intPart = (raw.split('.')[0] || '').replace(/^0+(?=\d)/, '') || '0';
+  const maxStr = String(OPENING_BALANCE_MAX);
+  if (intPart.length !== maxStr.length) return intPart.length > maxStr.length;
+  // Same digit count: any nonzero fractional part pushes it over an equal integer.
+  if (intPart > maxStr) return true;
+  if (intPart < maxStr) return false;
+  const decPart = raw.split('.')[1] || '';
+  return /[1-9]/.test(decPart);
+}
 
 // Strip everything except digits and a single decimal point from user input,
-// returning the plain numeric string to store.
+// returning the plain numeric string to store. Values above OPENING_BALANCE_MAX
+// are clamped to the cap so the balance can never exceed 99 billion.
 function parseBalanceInput(value) {
   if (value === undefined || value === null) return '';
   let cleaned = String(value).replace(/[^\d.]/g, '');
   const firstDot = cleaned.indexOf('.');
   if (firstDot !== -1) {
-    // Keep only the first decimal point; drop any later ones.
-    cleaned = cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, '');
+    // Keep only the first decimal point; drop any later ones, and cap the
+    // fractional part at two digits so no third decimal place can be typed.
+    const intPart = cleaned.slice(0, firstDot);
+    const decPart = cleaned.slice(firstDot + 1).replace(/\./g, '').slice(0, 2);
+    cleaned = `${intPart}.${decPart}`;
+  }
+  if (cleaned === '' || cleaned === '.') return cleaned;
+  if (exceedsBalanceMax(cleaned)) {
+    // Over the cap: clamp to the max, keeping a trailing "." if mid-typing.
+    return String(OPENING_BALANCE_MAX) + (cleaned.endsWith('.') ? '.' : '');
   }
   return cleaned;
 }
@@ -42,12 +67,17 @@ function formatBalanceDisplay(value) {
 }
 
 // On blur, normalize the decimals to exactly two places (e.g. "1234" -> "1234.00").
+// Done as a pure string operation — routing large values through Number()/toFixed()
+// loses precision past ~15 digits and can collapse the amount, so we never do that.
 function normalizeBalanceDecimals(value) {
   const raw = parseBalanceInput(value);
-  if (raw === '') return '';
-  const num = Number(raw);
-  if (!Number.isFinite(num)) return raw;
-  return num.toFixed(2);
+  if (raw === '' || raw === '.') return '';
+  let [intPart = '', decPart = ''] = raw.split('.');
+  // Strip leading zeros from the integer part but keep a single leading 0
+  // (so ".5" / "0.5" / "00" normalize to "0.50" / "0.50" / "0.00").
+  intPart = intPart.replace(/^0+(?=\d)/, '') || '0';
+  decPart = (decPart + '00').slice(0, 2); // pad/truncate to exactly two places
+  return `${intPart}.${decPart}`;
 }
 
 // --- Reusable bits ---
@@ -968,7 +998,7 @@ export function StepSalesSetting({ state, set, next, back, skip, submitSalesMeth
                 <input
                   type="text"
                   inputMode="decimal"
-                  placeholder="000,000,000.00"
+                  placeholder="0.00"
                   value={formatBalanceDisplay(p.openingBalance)}
                   onChange={(e) => {
                     const raw = parseBalanceInput(e.target.value);
