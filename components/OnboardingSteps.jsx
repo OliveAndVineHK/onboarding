@@ -729,6 +729,36 @@ export function StepSalesSetting({ state, set, next, back, skip, submitSalesMeth
   const [saveError, setSaveError] = useState('');
   const balanceEmpty = p.openingBalance === undefined || p.openingBalance === null || String(p.openingBalance).trim() === '';
 
+  // Server-authoritative "today" in Hong Kong time — caps the opening date so a
+  // future date can't be selected. Falls back to an HK date derived in the
+  // browser if the server call fails (the raw browser timezone isn't trusted).
+  const dateRef = useRef(null);
+  const [serverToday, setServerToday] = useState('');
+  const [showDateError, setShowDateError] = useState(false);
+  const hkTodayFallback = (() => {
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Hong_Kong' }).format(new Date());
+    } catch {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+  })();
+  const openingMaxDate = serverToday || hkTodayFallback;
+  const dateIsFuture = !!p.openingDate && p.openingDate > openingMaxDate;
+  useEffect(() => {
+    const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
+    let cancelled = false;
+    fetch(`${base}/api/onboarding/server-time`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d && d.today) setServerToday(d.today);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     const onBlocked = () => {
       setShowBalanceError(true);
@@ -757,6 +787,14 @@ export function StepSalesSetting({ state, set, next, back, skip, submitSalesMeth
       return;
     }
     setShowBalanceError(false);
+    if (dateIsFuture) {
+      setShowDateError(true);
+      requestAnimationFrame(() => {
+        if (dateRef.current) dateRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      return;
+    }
+    setShowDateError(false);
     if (saving) return;
     // Save everything on this step (sales methods + opening balance/date).
     if (typeof submitSalesMethods === 'function') {
@@ -811,7 +849,7 @@ export function StepSalesSetting({ state, set, next, back, skip, submitSalesMeth
         electronicMethods: electronic,
         deliveryMethods: delivery,
         expenseCodes: { all: true, selected: {} },
-        openingDate: todayIso,
+        openingDate: openingMaxDate || todayIso,
       },
     });
     setAutoFilling(false);
@@ -866,15 +904,20 @@ export function StepSalesSetting({ state, set, next, back, skip, submitSalesMeth
           <div className="pc-section-sub">Set the starting point so future movements reconcile correctly.</div>
         </div>
         <div className={'pc-card' + (showBalanceError && balanceEmpty ? ' is-error' : '')} ref={balanceRef}>
-          <div className="pc-field">
+          <div className={'pc-field' + (showDateError && dateIsFuture ? ' field-error' : '')} ref={dateRef}>
             <div className="pc-sub">
               Choose the first date that you wish to use <span className="pc-hint">(prefilled with today&apos;s date — click to choose another)</span>
             </div>
             <MintyDatePicker
               value={p.openingDate || ''}
-              onChange={(v) => upd('openingDate', v)}
+              onChange={(v) => {
+                upd('openingDate', v);
+                setShowDateError(false);
+              }}
               placeholder="Select a date"
+              maxDate={openingMaxDate}
             />
+            {showDateError && dateIsFuture && <div className="field-required">You can&apos;t select a future date</div>}
           </div>
           <div className={'pc-field' + (showBalanceError && balanceEmpty ? ' field-error' : '')}>
             <div className="pc-sub">Choose the beginning petty cash balance of the day</div>
