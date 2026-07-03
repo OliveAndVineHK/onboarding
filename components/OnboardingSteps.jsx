@@ -10,6 +10,46 @@ import Confetti from './Confetti';
 import ErrorBanner from './ErrorBanner';
 import { COUNTRY_OPTIONS, CURRENCY_OPTIONS } from '@/lib/entityOptions';
 
+// --- Opening balance formatting helpers ---
+// The stored value (state.pettyCash.openingBalance) is always a plain numeric
+// string (e.g. "1234.5") so the submit payload stays clean. Display adds commas
+// every three digits with two decimal places (e.g. "1,234.50"); the placeholder
+// shows the default shape "000,000,000.00".
+
+// Strip everything except digits and a single decimal point from user input,
+// returning the plain numeric string to store.
+function parseBalanceInput(value) {
+  if (value === undefined || value === null) return '';
+  let cleaned = String(value).replace(/[^\d.]/g, '');
+  const firstDot = cleaned.indexOf('.');
+  if (firstDot !== -1) {
+    // Keep only the first decimal point; drop any later ones.
+    cleaned = cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, '');
+  }
+  return cleaned;
+}
+
+// Add grouping commas to the integer part while the user types, preserving a
+// trailing "." or partial decimals so typing isn't disrupted.
+function formatBalanceDisplay(value) {
+  if (value === undefined || value === null || String(value).trim() === '') return '';
+  const raw = parseBalanceInput(value);
+  if (raw === '') return '';
+  const [intPart, decPart] = raw.split('.');
+  const groupedInt = (intPart || '').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  if (raw.indexOf('.') === -1) return groupedInt;
+  return `${groupedInt || '0'}.${decPart}`;
+}
+
+// On blur, normalize the decimals to exactly two places (e.g. "1234" -> "1234.00").
+function normalizeBalanceDecimals(value) {
+  const raw = parseBalanceInput(value);
+  if (raw === '') return '';
+  const num = Number(raw);
+  if (!Number.isFinite(num)) return raw;
+  return num.toFixed(2);
+}
+
 // --- Reusable bits ---
 export function Switch({ on, onChange }) {
   return <button type="button" className={'switch' + (on ? ' on' : '')} onClick={() => onChange(!on)} aria-pressed={on} />;
@@ -926,14 +966,18 @@ export function StepSalesSetting({ state, set, next, back, skip, submitSalesMeth
               <div className="input-prefix">
                 <div className="prefix">{currencyCode(state.entity.currency)}</div>
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={p.openingBalance ?? ''}
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="000,000,000.00"
+                  value={formatBalanceDisplay(p.openingBalance)}
                   onChange={(e) => {
-                    upd('openingBalance', e.target.value);
-                    if (e.target.value.trim() !== '') setShowBalanceError(false);
+                    const raw = parseBalanceInput(e.target.value);
+                    upd('openingBalance', raw);
+                    if (raw.trim() !== '') setShowBalanceError(false);
+                  }}
+                  onBlur={(e) => {
+                    const raw = parseBalanceInput(e.target.value);
+                    if (raw.trim() !== '') upd('openingBalance', normalizeBalanceDecimals(raw));
                   }}
                 />
               </div>
