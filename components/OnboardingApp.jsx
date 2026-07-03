@@ -960,21 +960,72 @@ export default function OnboardingApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current, token, state.entity.id]);
 
-  // Create the entity in Module 1 (Step 1). Token-authenticated; no cookies.
-  // When launched standalone (no token), it no-ops so the prototype still runs.
+  // Snapshot of the entity fields as they were last persisted to the backend,
+  // so a revisit can tell whether the user actually changed anything (and skip
+  // the network round-trip if not).
+  const savedEntityRef = useRef(null);
+
+  // Create the entity in Module 1 (Step 1), or update it in place when the user
+  // goes back and edits an already-created entity. Token-authenticated; no
+  // cookies. When launched standalone (no token), it no-ops so the prototype
+  // still runs.
   const submitEntity = async () => {
-    if (state.entity.id) return { ok: true }; // already created (revisiting step)
     if (!token) return { ok: true }; // standalone / no Module 1 handoff
     const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
+    const payload = {
+      entity_name: state.entity.name,
+      country: state.entity.country,
+      currency: state.entity.currency,
+    };
+
+    // --- Revisit: entity already exists, so this is an EDIT, not a create. ---
+    if (state.entity.id) {
+      // If nothing changed since the last persist, there's nothing to save —
+      // keep the old no-op behaviour and just advance.
+      const prev = savedEntityRef.current;
+      const unchanged =
+        prev &&
+        prev.entity_name === payload.entity_name &&
+        prev.country === payload.country &&
+        prev.currency === payload.currency;
+      if (unchanged) return { ok: true };
+
+      try {
+        // NOTE FOR BACKEND: this endpoint does not exist yet. The frontend now
+        // expects PUT /api/onboarding/entity/{entity_id} to update an existing
+        // entity's name/country/currency (same fields as create), returning the
+        // usual { entity_id } / { error } shape and a 409 on name collision.
+        // Until it ships, revisiting Step 1 with edits will fail this branch.
+        const res = await fetch(`${base}/api/onboarding/entity/${encodeURIComponent(state.entity.id)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const backendMsg = (data.error || data.message || '').toString();
+          if (res.status === 409) {
+            return {
+              ok: false,
+              duplicate: true,
+              error: `An entity named “${state.entity.name.trim()}” already exists. Please choose a different name.`,
+            };
+          }
+          return { ok: false, error: backendMsg || 'Failed to update entity. Please try again.' };
+        }
+        savedEntityRef.current = { ...payload };
+        return { ok: true };
+      } catch {
+        return { ok: false, error: 'Could not reach the server. Please try again.' };
+      }
+    }
+
+    // --- First time through: create the entity. ---
     try {
       const res = await fetch(`${base}/api/onboarding/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          entity_name: state.entity.name,
-          country: state.entity.country,
-          currency: state.entity.currency,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -996,6 +1047,7 @@ export default function OnboardingApp() {
       if (data.entity_id) {
         setState((prev) => ({ ...prev, entity: { ...prev.entity, id: data.entity_id } }));
       }
+      savedEntityRef.current = { ...payload };
       return { ok: true };
     } catch {
       return { ok: false, error: 'Could not reach the server. Please try again.' };
