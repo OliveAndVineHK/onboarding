@@ -1136,6 +1136,19 @@
   .mselect-value.placeholder { color: var(--muted); }
   .mselect-caret { display: grid; place-items: center; color: var(--muted); transition: transform .25s ease, color .2s ease; }
   .mselect.open .mselect-caret { transform: rotate(180deg); color: var(--accent); }
+  .mselect-clear {
+    flex: 0 0 auto;
+    display: grid; place-items: center;
+    width: 22px; height: 22px;
+    padding: 0; margin: 0;
+    border: 0; border-radius: 999px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: background .15s ease, color .15s ease;
+  }
+  .mselect-clear:hover { background: color-mix(in oklab, var(--line-strong) 45%, transparent); color: var(--ink); }
+  .mselect-clear:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   .mselect.disabled { opacity: 0.55; pointer-events: none; }
 
   .mselect-menu {

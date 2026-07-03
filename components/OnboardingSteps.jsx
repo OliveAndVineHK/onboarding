@@ -697,6 +697,7 @@ function PCSection({ title, fields, cardRef }) {
             options={f.options}
             placeholder="Select an option"
             searchable
+            clearable
             onCreate={f.onAddNew}
             createNoun="contact"
           />
