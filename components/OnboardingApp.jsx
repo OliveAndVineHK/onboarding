@@ -332,6 +332,9 @@ function Stepper({ current, onClick, maxReached, displaySteps }) {
         const status = isDone ? 'done' : isActive ? 'active' : 'todo';
         const firstId = d.ids[0];
         const reachable = firstId <= maxReached;
+        // Once on "All Set" (9), onboarding is finished — no step is clickable
+        // anymore, but completed steps keep their "done" look (not the lock).
+        const clickable = reachable && current !== 9;
         const hasSubs = !!d.subs;
         const showSubs = hasSubs && (isActive || hoverPettyCash);
         return (
@@ -339,8 +342,8 @@ function Stepper({ current, onClick, maxReached, displaySteps }) {
             key={d.ids[0]}
             data-step-key={d.ids[0]}
             data-pulse={pulseId}
-            className={'step ' + status + (reachable ? '' : ' locked') + (hasSubs ? ' has-subs' : '')}
-            onClick={() => reachable && onClick(firstId)}
+            className={'step ' + status + (reachable ? '' : ' locked') + (clickable ? '' : ' not-clickable') + (hasSubs ? ' has-subs' : '')}
+            onClick={() => clickable && onClick(firstId)}
             onMouseEnter={() => hasSubs && setHoverPettyCash(true)}
             onMouseLeave={() => hasSubs && setHoverPettyCash(false)}
             title={reachable ? undefined : 'Complete the previous steps first'}
@@ -463,6 +466,9 @@ export default function OnboardingApp() {
   const back = () => setCurrent((c) => prevActiveId(c));
   const goto = (id) => {
     if (!activeIds.includes(id)) return;
+    // Onboarding is finished on the "All Set" step (9) — lock the stepper so the
+    // user can't jump back into earlier steps once they've reached it.
+    if (current === 9) return;
     if (id > maxReached) return;
     // Block forward jumps from a step that isn't complete (e.g. sub-step "Account Code" from "Sales")
     if (id > current && !isStepComplete(current, state)) {

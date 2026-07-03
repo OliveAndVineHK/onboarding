@@ -102,8 +102,11 @@
   .step-wave { display: none; }
   @keyframes waveDrift { from { transform: translateX(0); } to { transform: translateX(-50%); } }
   .step > .num, .step > .label { position: relative; z-index: 3; }
-  .step:hover:not(.locked) { background: #e6e9ed; }
+  .step:hover:not(.locked):not(.not-clickable) { background: #e6e9ed; }
   .step.locked { cursor: not-allowed; opacity: 0.55; }
+  /* On the final "All Set" step every step is frozen: no pointer, no hover
+     shift — but completed steps keep their full "done" styling (not dimmed). */
+  .step.not-clickable { cursor: default; }
   .step .num {
     width: auto; height: auto;
     border-radius: 0;
@@ -123,7 +126,7 @@
   }
   .step.done .num { background: transparent; color: #0f7a6e; }
   .step.done .label { color: #0f7a6e; }
-  .step.done:hover:not(.locked) { background: #c4ebe6; }
+  .step.done:hover:not(.locked):not(.not-clickable) { background: #c4ebe6; }
   .step.active {
     color: #054b44;
     background: #46D8CC;
