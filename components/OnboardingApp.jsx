@@ -337,13 +337,20 @@ function Stepper({ current, onClick, maxReached, displaySteps }) {
         const clickable = reachable && current !== 9;
         const hasSubs = !!d.subs;
         const showSubs = hasSubs && (isActive || hoverPettyCash);
+        // For a grouped tile (e.g. Petty Cash = steps 5,6,7), land on the
+        // sub-step the user was actually on rather than always the first: the
+        // current sub-step if we're inside the group, otherwise the furthest
+        // reached sub-step (clamped to the group), falling back to firstId.
+        const targetId = d.ids.includes(current)
+          ? current
+          : (d.ids.filter((i) => i <= maxReached).pop() ?? firstId);
         return (
           <div
             key={d.ids[0]}
             data-step-key={d.ids[0]}
             data-pulse={pulseId}
             className={'step ' + status + (reachable ? '' : ' locked') + (clickable ? '' : ' not-clickable') + (hasSubs ? ' has-subs' : '')}
-            onClick={() => clickable && onClick(firstId)}
+            onClick={() => clickable && onClick(targetId)}
             onMouseEnter={() => hasSubs && setHoverPettyCash(true)}
             onMouseLeave={() => hasSubs && setHoverPettyCash(false)}
             title={reachable ? undefined : 'Complete the previous steps first'}
@@ -598,6 +605,14 @@ export default function OnboardingApp() {
         };
         return nextState;
       });
+      // Seed the "last persisted" snapshot from the resumed entity so a revisit
+      // to Step 1 that changes nothing stays a no-op (no needless PUT). Uses the
+      // same fields nextState landed on, falling back to FE display defaults.
+      savedEntityRef.current = {
+        entity_name: nextState.entity.name,
+        country: nextState.entity.country,
+        currency: nextState.entity.currency,
+      };
       // Land on the FE step the backend persisted (`payload.saved_step`), with
       // the Xero gate applied — deriveResumeStep handles the contract, including
       // the null-saved_step fallback. We do NOT use the backend's `current_step`
@@ -991,11 +1006,12 @@ export default function OnboardingApp() {
       if (unchanged) return { ok: true };
 
       try {
-        // NOTE FOR BACKEND: this endpoint does not exist yet. The frontend now
-        // expects PUT /api/onboarding/entity/{entity_id} to update an existing
-        // entity's name/country/currency (same fields as create), returning the
-        // usual { entity_id } / { error } shape and a 409 on name collision.
-        // Until it ships, revisiting Step 1 with edits will fail this branch.
+        // Revisiting Step 1 overwrites the entity in place via
+        // PUT /api/onboarding/entity/{entity_id} (same fields as create) — it
+        // never creates a new entity. Returns { entity_id, name } on success,
+        // 409 on a name collision with a *different* entity. Accepts the same
+        // field aliases as /create (entity_name|name, country|country_code,
+        // currency|currency_code); we send the canonical names.
         const res = await fetch(`${base}/api/onboarding/entity/${encodeURIComponent(state.entity.id)}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
