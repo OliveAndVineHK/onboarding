@@ -1458,7 +1458,12 @@ export default function OnboardingApp() {
     r.style.setProperty('--accent-hover', ACCENT_DEFAULTS.accent);
   }, []);
 
-  const stepProps = { state, set, next, back, skip, restart, submitEntity, submitModule, connectXero, disconnectXero, xeroMismatch, clearXeroMismatch: () => setXeroMismatch(''), submitSalesMethods, submitOpeningBalance, fetchExistingSalesMethods, accountOptions, submitAccountCodes, submitContacts, createContact, submitBills, submitInvite, cancelInvite, finishOnboarding, saveAndExit };
+  // The last content step (immediately before "All Set", step 9) shows a
+  // "Complete" button instead of "Save & Next". Which step that is depends on
+  // the selected modules: Bills (8) when bills is on, otherwise Others (7).
+  const isLastContentStep = current === activeIds[activeIds.length - 2];
+
+  const stepProps = { state, set, next, back, skip, restart, submitEntity, submitModule, connectXero, disconnectXero, xeroMismatch, clearXeroMismatch: () => setXeroMismatch(''), submitSalesMethods, submitOpeningBalance, fetchExistingSalesMethods, accountOptions, submitAccountCodes, submitContacts, createContact, submitBills, submitInvite, cancelInvite, finishOnboarding, saveAndExit, isLastContentStep };
 
   return (
     <>

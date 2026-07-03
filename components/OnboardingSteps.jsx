@@ -1107,7 +1107,7 @@ export function StepAccountCode({ state, set, next, back, skip, accountOptions, 
   );
 }
 
-export function StepOthers({ state, set, next, back, skip, accountOptions, submitContacts, createContact, saveAndExit }) {
+export function StepOthers({ state, set, next, back, skip, accountOptions, submitContacts, createContact, saveAndExit, isLastContentStep }) {
   const stepSubmit = submitContacts;
   const p = state.pettyCash;
   const upd = (k, v) => set({ pettyCash: { ...p, [k]: v } });
@@ -1214,7 +1214,7 @@ export function StepOthers({ state, set, next, back, skip, accountOptions, submi
         <div className="step-actions">
           <SaveExitLink saveAndExit={saveAndExit} submitFn={stepSubmit} disabled={saving} />
           <button className="btn btn-primary" onClick={tryNext} disabled={saving}>
-            {saving ? 'Saving…' : <>Save &amp; Next <Icon.Arrow /></>}
+            {saving ? 'Saving…' : isLastContentStep ? 'Complete' : <>Save &amp; Next <Icon.Arrow /></>}
           </button>
         </div>
       </div>
@@ -1288,7 +1288,7 @@ function BillAccountCodesCard({ codes, value, onChange, labels }) {
   );
 }
 
-export function StepBills({ state, set, next, back, skip, accountOptions, submitBills, saveAndExit }) {
+export function StepBills({ state, set, next, back, skip, accountOptions, submitBills, saveAndExit, isLastContentStep }) {
   const stepSubmit = submitBills;
   const b = state.bills;
   const upd = (k, v) => set({ bills: { ...b, [k]: v } });
@@ -1339,7 +1339,7 @@ export function StepBills({ state, set, next, back, skip, accountOptions, submit
         <div className="step-actions">
           <SaveExitLink saveAndExit={saveAndExit} submitFn={stepSubmit} disabled={saving} />
           <button className="btn btn-primary" onClick={tryNext} disabled={saving}>
-            {saving ? 'Saving…' : <>Save &amp; Next <Icon.Arrow /></>}
+            {saving ? 'Saving…' : isLastContentStep ? 'Complete' : <>Save &amp; Next <Icon.Arrow /></>}
           </button>
         </div>
       </div>
@@ -1675,7 +1675,7 @@ export function StepAllSet({ state, set, restart, finishOnboarding }) {
 
       <div className="conf-actions" style={{ flexDirection: 'column', alignItems: 'center', gap: 10 }}>
         <button className="btn btn-primary" onClick={onContinue} disabled={finishing}>
-          {finishing ? 'Saving…' : <>Continue with Minty <Icon.Arrow /></>}
+          {finishing ? 'Saving…' : <>Go to entity list <Icon.Arrow /></>}
         </button>
       </div>
     </>
