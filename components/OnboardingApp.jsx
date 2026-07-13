@@ -15,7 +15,6 @@ import {
   StepInvite,
   StepAllSet,
 } from './OnboardingSteps';
-import { toAmountString } from '@/lib/amount';
 
 // Baked-in defaults that used to live in TWEAK_DEFAULTS (tweaks-panel removed from prod build)
 const ACCENT_DEFAULTS = {
@@ -1151,9 +1150,7 @@ export default function OnboardingApp() {
           opening_date: p.openingDate,
           // Beginning petty-cash amount lives in opening_balance now (cash_addition
           // is forced to 0 by the backend); send it here so save and resume agree.
-          // Normalized to an exact 2dp decimal string so the payload doesn't depend
-          // on whether the user blurred the field before saving.
-          opening_balance: toAmountString(p.openingBalance),
+          opening_balance: p.openingBalance,
         }),
       });
       const data = await res.json().catch(() => ({}));
