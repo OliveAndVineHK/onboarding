@@ -8,7 +8,7 @@ import MintySelect from './MintySelect';
 import MintyDatePicker from './MintyDatePicker';
 import Confetti from './Confetti';
 import ErrorBanner from './ErrorBanner';
-import { COUNTRY_OPTIONS, CURRENCY_OPTIONS } from '@/lib/entityOptions';
+import { fetchCountries, fetchCurrencies } from '@/lib/refData';
 import { acceptAmountInput, formatAmount, toAmountEditString } from '@/lib/amount';
 
 // --- Reusable bits ---
@@ -72,6 +72,44 @@ export function StepCreateEntity({ state, set, next, skip, submitEntity, saveAnd
   // Set when the backend rejects the name as already-taken, so we can flag the
   // Entity Name field and clear the flag as soon as the user edits the name.
   const [nameTaken, setNameTaken] = useState(false);
+  // Country / currency options come from the backend registries
+  // (country_info / currency_info): the dropdown shows the name but its
+  // value — what gets stored and submitted — is the registry uuid, so the
+  // created entity's country_id / currency_id FKs receive uuids.
+  const [countryOptions, setCountryOptions] = useState([]);
+  const [currencyOptions, setCurrencyOptions] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchCountries().then((list) => {
+      if (!cancelled) {
+        setCountryOptions(list.map((c) => ({ value: c.country_id, label: c.country_name_en })));
+      }
+    });
+    fetchCurrencies().then((list) => {
+      if (!cancelled) {
+        setCurrencyOptions(list.map((c) => ({ value: c.currency_id, label: c.currency_name })));
+      }
+    });
+    return () => { cancelled = true; };
+  }, []);
+  // Migrate legacy name values (the pre-registry defaults like 'Hong Kong' /
+  // 'Hong Kong Dollar', or an old saved session) to their registry uuids once
+  // the options are in, so submits always carry uuids.
+  useEffect(() => {
+    const byLabel = (opts, v) =>
+      v && !opts.some((o) => o.value === v) ? opts.find((o) => o.label === v) : null;
+    const country = byLabel(countryOptions, s.country);
+    const currency = byLabel(currencyOptions, s.currency);
+    if (country || currency) {
+      set({
+        entity: {
+          ...s,
+          ...(country ? { country: country.value } : {}),
+          ...(currency ? { currency: currency.value } : {}),
+        },
+      });
+    }
+  }, [countryOptions, currencyOptions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleNext = async () => {
     if (!canNext || saving) return;
@@ -129,11 +167,11 @@ export function StepCreateEntity({ state, set, next, skip, submitEntity, saveAnd
         </div>
         <div className="field">
           <label>Country</label>
-          <MintySelect value={s.country} onChange={(v) => upd('country', v)} options={COUNTRY_OPTIONS} searchable />
+          <MintySelect value={s.country} onChange={(v) => upd('country', v)} options={countryOptions} searchable />
         </div>
         <div className="field">
           <label>Currency</label>
-          <MintySelect value={s.currency} onChange={(v) => upd('currency', v)} options={CURRENCY_OPTIONS} searchable />
+          <MintySelect value={s.currency} onChange={(v) => upd('currency', v)} options={currencyOptions} searchable />
         </div>
         <div className="field">
           <label>Contact Phone <span className="field-optional">(optional)</span></label>
@@ -467,7 +505,17 @@ const CURRENCY_CODES = {
   'US Dollar': 'USD',
   'Indian Rupee': 'INR',
 };
-const currencyCode = (c) => CURRENCY_CODES[c] || (c || '').split(' ')[0];
+// state.entity.currency holds a currency_info uuid (Step 1 dropdowns submit
+// uuids); resolve it to the ISO code via the fetched registry. The name-based
+// map remains as a fallback for sessions saved before the uuid switch. Never
+// render a bare uuid — while the registry is still loading, show nothing.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const currencyCode = (c, registry = []) => {
+  const row = registry.find((r) => r.currency_id === c);
+  if (row) return row.iso_code || row.currency_name;
+  if (UUID_RE.test(c || '')) return '';
+  return CURRENCY_CODES[c] || (c || '').split(' ')[0];
+};
 
 function MethodList({ title, methods, placeholder = 'Enter method name', onAdd, onChange, autoFilled = false }) {
   const [open, setOpen] = useState(true);
@@ -726,6 +774,13 @@ export function StepSalesSetting({ state, set, next, back, skip, submitSalesMeth
   const p = state.pettyCash;
   const upd = (k, v) => set({ pettyCash: { ...p, [k]: v } });
   const balanceRef = useRef(null);
+  // Currency registry for the amount prefix — entity.currency is a uuid.
+  const [currencyRegistry, setCurrencyRegistry] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchCurrencies().then((list) => { if (!cancelled) setCurrencyRegistry(list); });
+    return () => { cancelled = true; };
+  }, []);
   const [showBalanceError, setShowBalanceError] = useState(false);
   // While focused the field shows plain digits; commas and the trailing ".00"
   // are applied on blur (and on any value rehydrated from the backend).
@@ -928,7 +983,7 @@ export function StepSalesSetting({ state, set, next, back, skip, submitSalesMeth
             <div className="pc-sub">Choose the beginning petty cash balance of the day</div>
             <div className="field">
               <div className="input-prefix">
-                <div className="prefix">{currencyCode(state.entity.currency)}</div>
+                <div className="prefix">{currencyCode(state.entity.currency, currencyRegistry)}</div>
                 <input
                   type="text"
                   inputMode="decimal"
