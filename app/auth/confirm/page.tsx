@@ -93,7 +93,7 @@ function ConfirmContent() {
       // survives refresh/new session — lock the whole form and show the message.
       if (res.status === 429) {
         setLocked(true);
-        if (data.message) setError(data.message);
+        setError(data.message || "Too many attempts. Please try again later.");
         setVerifying(false);
         return;
       }
@@ -102,7 +102,7 @@ function ConfirmContent() {
         // counter on any server-acknowledged failure. Network errors (catch
         // branch) don't count — no code was actually submitted then.
         setAttemptsLeft((a) => Math.max(0, a - 1));
-        setError(data.message || "Hmm, that code doesn't look right. Want to try again?");
+        setError(data.message || "Verification failed.");
         setVerifying(false);
         return;
       }
@@ -113,7 +113,7 @@ function ConfirmContent() {
           : FLASK_BASE;
       window.location.href = target;
     } catch {
-      setError("My connection timed out—let's try that again.");
+      setError("Network error — is the Flask server running?");
       setVerifying(false);
     }
   };
@@ -133,13 +133,13 @@ function ConfirmContent() {
       // 429s. Keep the form locked and show the too-many-attempts message.
       if (res.status === 429) {
         setLocked(true);
-        if (data.message) setError(data.message);
+        setError(data.message || "Too many attempts. Please try again later.");
         setResending(false);
         return;
       }
       if (!res.ok || data.status === "error") {
         // 400 covers early-resend ("Please wait a moment…") and other failures.
-        setError(data.message || "Something got stuck resending that! One more try?");
+        setError(data.message || "Could not resend the code. Please try again.");
         setResending(false);
         return;
       }
@@ -153,7 +153,7 @@ function ConfirmContent() {
       setResending(false);
       inputsRef.current[0]?.focus();
     } catch {
-      setError("My connection timed out—let's try that again.");
+      setError("Network error — is the Flask server running?");
       setResending(false);
     }
   };
@@ -251,7 +251,7 @@ function ConfirmContent() {
           <div className="confirm-status" aria-live="polite">
             {locked ? (
               <span className="confirm-status-warn">
-                Too many tries! I’ve locked this account for a bit—check back soon?
+                Too many attempts — this account is temporarily locked. Please try again later.
               </span>
             ) : noAttempts ? (
               <span className="confirm-status-warn">No attempts left — please resend the code.</span>
