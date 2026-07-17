@@ -160,7 +160,7 @@ export function StepCreateEntity({ state, set, next, skip, submitEntity, saveAnd
             }}
           />
           {nameTaken && (
-            <div className="field-required" role="alert">This entity name is already taken. Please choose a different name.</div>
+            <div className="field-required" role="alert">Oh, someone got there first! Do you have another name in mind?</div>
           )}
         </div>
         <div className="field">
@@ -364,8 +364,8 @@ export function StepConnectXero({ state, set, next, back, skip, connectXero, dis
     if (!xeroMismatch) return;
     toast.error(
       xeroMismatch === 'unknown'
-        ? "That's a different Xero account from the one you started with. Sign in with the Xero account tied to your onboarding email and I'll connect it."
-        : `That's a different Xero account from the one you started with. Sign in to Xero with ${xeroMismatch} and I'll connect it.`
+        ? "Hmm, that's a different Xero account. Sign in with your onboarding email?"
+        : `Hmm, that's a different Xero account. Sign in with ${xeroMismatch}?`
     );
     if (typeof clearXeroMismatch === 'function') clearXeroMismatch();
   }, [xeroMismatch, clearXeroMismatch, toast]);
@@ -379,8 +379,8 @@ export function StepConnectXero({ state, set, next, back, skip, connectXero, dis
     if (!xeroConflict) return;
     toast.error(
       xeroConflict === 'unknown'
-        ? 'This Xero organisation is already connected to another entity. A Xero organisation can only be linked to one entity at a time — disconnect it there first, then connect it here.'
-        : `This Xero organisation is already connected to your entity “${xeroConflict}”. A Xero organisation can only be linked to one entity at a time — disconnect it from “${xeroConflict}” first, then connect it here.`
+        ? 'Oh, another entity got to this Xero org first! Disconnect it there, then come back?'
+        : `Oh, “${xeroConflict}” is using this Xero org already! Disconnect it there, then come back?`
     );
     if (typeof clearXeroConflict === 'function') clearXeroConflict();
   }, [xeroConflict, clearXeroConflict, toast]);
@@ -764,7 +764,7 @@ function PCSection({ title, fields, cardRef }) {
             onCreate={f.onAddNew}
             createNoun="contact"
           />
-          {f.error && <div className="field-required">This is a required field</div>}
+          {f.error && <div className="field-required">I&apos;ll need this one to keep going.</div>}
         </div>
       ))}
     </div>
@@ -989,7 +989,7 @@ export function StepSalesSetting({ state, set, next, back, skip, submitSalesMeth
               placeholder="Select a date"
               maxDate={openingMaxDate}
             />
-            {showDateError && dateIsFuture && <div className="field-required">You can&apos;t select a future date</div>}
+            {showDateError && dateIsFuture && <div className="field-required">That day hasn&apos;t happened yet! Pick an earlier one?</div>}
           </div>
           <div className={'pc-field' + (showBalanceError && balanceEmpty ? ' field-error' : '')}>
             <div className="pc-sub">Choose the beginning petty cash balance of the day</div>
@@ -1012,7 +1012,7 @@ export function StepSalesSetting({ state, set, next, back, skip, submitSalesMeth
                 />
               </div>
             </div>
-            {showBalanceError && balanceEmpty && <div className="field-required">This is a required field</div>}
+            {showBalanceError && balanceEmpty && <div className="field-required">I&apos;ll need a starting balance here.</div>}
           </div>
         </div>
       </div>
@@ -1501,7 +1501,7 @@ export function StepInvite({ state, set, next, back, submitInvite, cancelInvite,
     if (!canSend) return;
     if (!emailOk) {
       setEmailTouched(true);
-      notify.error("That doesn't look like an email to me. Try something like user@domain.com?");
+      notify.error("Hmm, that doesn't look like an email. Try user@domain.com?");
       return;
     }
     setSending(true);
@@ -1517,7 +1517,7 @@ export function StepInvite({ state, set, next, back, submitInvite, cancelInvite,
     // NOT add it to the pending list — the invitee received nothing. The form
     // is left filled so the user can retry without re-typing.
     if (result.emailSent === false) {
-      notify.error(`I couldn't get the invitation email to ${sentEmail}. Give it another try, or reach out to support?`);
+      notify.error(`That invite didn't reach ${sentEmail}! Want to try again?`);
       return;
     }
     const inv = result.invitation || {};

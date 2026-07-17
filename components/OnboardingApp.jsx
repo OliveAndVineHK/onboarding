@@ -924,11 +924,11 @@ export default function OnboardingApp() {
         body: JSON.stringify({ entity_id: state.entity.id }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) return { ok: false, error: data.error || "I couldn't disconnect from Xero. Give it another try?" };
+      if (!res.ok) return { ok: false, error: data.error || "That didn't quite work—let's try disconnecting again." };
       set({ xero: { ...state.xero, connected: false, org: '' } });
       return { ok: true };
     } catch {
-      return { ok: false, error: "I couldn't reach the server. Give it another try?" };
+      return { ok: false, error: "My connection timed out—let's try that again." };
     }
   };
 
@@ -1074,15 +1074,15 @@ export default function OnboardingApp() {
             return {
               ok: false,
               duplicate: true,
-              error: `An entity named “${state.entity.name.trim()}” already exists. Please choose a different name.`,
+              error: `Oh, “${state.entity.name.trim()}” is taken already! Do you have another name in mind?`,
             };
           }
-          return { ok: false, error: backendMsg || "I couldn't save your entity. Give it another try?" };
+          return { ok: false, error: backendMsg || "Something got stuck saving that! Want to try again?" };
         }
         savedEntityRef.current = { ...payload };
         return { ok: true };
       } catch {
-        return { ok: false, error: "I couldn't reach the server. Give it another try?" };
+        return { ok: false, error: "My connection timed out—let's try that again." };
       }
     }
 
@@ -1105,10 +1105,10 @@ export default function OnboardingApp() {
           return {
             ok: false,
             duplicate: true,
-            error: `An entity named “${state.entity.name.trim()}” already exists. Please choose a different name.`,
+            error: `Oh, “${state.entity.name.trim()}” is taken already! Do you have another name in mind?`,
           };
         }
-        return { ok: false, error: backendMsg || "I couldn't create your entity. Give it another try?" };
+        return { ok: false, error: backendMsg || "That didn't quite work—let's try creating it again." };
       }
       if (data.entity_id) {
         setState((prev) => ({ ...prev, entity: { ...prev.entity, id: data.entity_id } }));
@@ -1116,7 +1116,7 @@ export default function OnboardingApp() {
       savedEntityRef.current = { ...payload };
       return { ok: true };
     } catch {
-      return { ok: false, error: "I couldn't reach the server. Give it another try?" };
+      return { ok: false, error: "My connection timed out—let's try that again." };
     }
   };
 
@@ -1126,7 +1126,7 @@ export default function OnboardingApp() {
     const moduleCodes = (state.modules || [])
       .map((id) => FE_TO_BACKEND_MODULE[id])
       .filter(Boolean);
-    if (moduleCodes.length === 0) return { ok: false, error: "I'll need at least one module to work with." };
+    if (moduleCodes.length === 0) return { ok: false, error: "I need at least one module to get started." };
     const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
     try {
       const res = await fetch(`${base}/api/onboarding/modules`, {
@@ -1135,10 +1135,10 @@ export default function OnboardingApp() {
         body: JSON.stringify({ entity_id: state.entity.id, modules: moduleCodes }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) return { ok: false, error: data.error || "I couldn't save your module choice. Give it another try?" };
+      if (!res.ok) return { ok: false, error: data.error || "Something got stuck! Want to try that again?" };
       return { ok: true };
     } catch {
-      return { ok: false, error: "I couldn't reach the server. Give it another try?" };
+      return { ok: false, error: "My connection timed out—let's try that again." };
     }
   };
 
@@ -1156,10 +1156,10 @@ export default function OnboardingApp() {
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) return { ok: false, error: data.error || "I couldn't save your sales methods. Give it another try?" };
+      if (!res.ok) return { ok: false, error: data.error || "Something got stuck saving those! Want to try again?" };
       return { ok: true };
     } catch {
-      return { ok: false, error: "I couldn't reach the server. Give it another try?" };
+      return { ok: false, error: "My connection timed out—let's try that again." };
     }
   };
 
@@ -1184,10 +1184,10 @@ export default function OnboardingApp() {
         }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) return { ok: false, error: data.error || "I couldn't save your opening balance. Give it another try?" };
+      if (!res.ok) return { ok: false, error: data.error || "Something got stuck saving that balance! One more try?" };
       return { ok: true };
     } catch {
-      return { ok: false, error: "I couldn't reach the server. Give it another try?" };
+      return { ok: false, error: "My connection timed out—let's try that again." };
     }
   };
 
@@ -1275,10 +1275,10 @@ export default function OnboardingApp() {
         body: JSON.stringify({ entity_id: state.entity.id, expense_codes: selectedCodes, mapping }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) return { ok: false, error: data.error || "I couldn't save your account codes. Give it another try?" };
+      if (!res.ok) return { ok: false, error: data.error || "Something got stuck saving those codes! One more try?" };
       return { ok: true };
     } catch {
-      return { ok: false, error: "I couldn't reach the server. Give it another try?" };
+      return { ok: false, error: "My connection timed out—let's try that again." };
     }
   };
 
@@ -1302,10 +1302,10 @@ export default function OnboardingApp() {
         body: JSON.stringify({ entity_id: state.entity.id, contacts }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) return { ok: false, error: data.error || "I couldn't save your contacts. Give it another try?" };
+      if (!res.ok) return { ok: false, error: data.error || "Something got stuck saving those contacts! One more try?" };
       return { ok: true };
     } catch {
-      return { ok: false, error: "I couldn't reach the server. Give it another try?" };
+      return { ok: false, error: "My connection timed out—let's try that again." };
     }
   };
 
@@ -1335,7 +1335,7 @@ export default function OnboardingApp() {
         // route the user back to the Xero step.
         return {
           ok: false,
-          error: data.error || "I couldn't create that contact. Give it another try?",
+          error: data.error || "That didn't quite work—let's try adding them again.",
           notConnected: res.status === 409 || data.connected === false,
         };
       }
@@ -1343,7 +1343,7 @@ export default function OnboardingApp() {
       setAccountOptions((prev) => ({ ...prev, contacts: [...(prev.contacts || []), option] }));
       return { ok: true, option };
     } catch {
-      return { ok: false, error: "I couldn't reach the server. Give it another try?" };
+      return { ok: false, error: "My connection timed out—let's try that again." };
     }
   };
 
@@ -1393,10 +1393,10 @@ export default function OnboardingApp() {
         body: JSON.stringify({ entity_id: state.entity.id, selected_codes: selectedCodes }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) return { ok: false, error: data.error || "I couldn't save your bill account codes. Give it another try?" };
+      if (!res.ok) return { ok: false, error: data.error || "Something got stuck saving those codes! One more try?" };
       return { ok: true };
     } catch {
-      return { ok: false, error: "I couldn't reach the server. Give it another try?" };
+      return { ok: false, error: "My connection timed out—let's try that again." };
     }
   };
 
@@ -1411,7 +1411,7 @@ export default function OnboardingApp() {
         body: JSON.stringify({ entity_id: state.entity.id, email, role }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) return { ok: false, error: data.error || "I couldn't send that invitation. Give it another try?" };
+      if (!res.ok) return { ok: false, error: data.error || "That invite didn't go through! Want to try again?" };
       // The invitation row can be created even when the email itself fails to
       // go out (Brevo/SMTP error) — the backend signals that with
       // email_sent: false. Pass it through so the UI can warn instead of
@@ -1425,7 +1425,7 @@ export default function OnboardingApp() {
         data.email_sent ?? (data.invitation && data.invitation.email_sent);
       return { ok: true, invitation: data.invitation, emailSent: emailSentFlag !== false };
     } catch {
-      return { ok: false, error: "I couldn't reach the server. Give it another try?" };
+      return { ok: false, error: "My connection timed out—let's try that again." };
     }
   };
 
@@ -1439,10 +1439,10 @@ export default function OnboardingApp() {
         body: JSON.stringify({ invitation_id: invitationId }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) return { ok: false, error: data.error || "I couldn't cancel that invitation. Give it another try?" };
+      if (!res.ok) return { ok: false, error: data.error || "That didn't quite work—let's try cancelling again." };
       return { ok: true };
     } catch {
-      return { ok: false, error: "I couldn't reach the server. Give it another try?" };
+      return { ok: false, error: "My connection timed out—let's try that again." };
     }
   };
 

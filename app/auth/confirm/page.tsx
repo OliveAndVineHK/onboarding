@@ -102,7 +102,7 @@ function ConfirmContent() {
         // counter on any server-acknowledged failure. Network errors (catch
         // branch) don't count — no code was actually submitted then.
         setAttemptsLeft((a) => Math.max(0, a - 1));
-        setError(data.message || "Verification failed.");
+        setError(data.message || "Hmm, that code doesn't look right. Want to try again?");
         setVerifying(false);
         return;
       }
@@ -113,7 +113,7 @@ function ConfirmContent() {
           : FLASK_BASE;
       window.location.href = target;
     } catch {
-      setError("Could not reach the server. Please try again.");
+      setError("My connection timed out—let's try that again.");
       setVerifying(false);
     }
   };
@@ -139,7 +139,7 @@ function ConfirmContent() {
       }
       if (!res.ok || data.status === "error") {
         // 400 covers early-resend ("Please wait a moment…") and other failures.
-        setError(data.message || "Could not resend the code. Please try again.");
+        setError(data.message || "Something got stuck resending that! One more try?");
         setResending(false);
         return;
       }
@@ -153,7 +153,7 @@ function ConfirmContent() {
       setResending(false);
       inputsRef.current[0]?.focus();
     } catch {
-      setError("Could not reach the server. Please try again.");
+      setError("My connection timed out—let's try that again.");
       setResending(false);
     }
   };
@@ -251,7 +251,7 @@ function ConfirmContent() {
           <div className="confirm-status" aria-live="polite">
             {locked ? (
               <span className="confirm-status-warn">
-                Too many attempts — this account is temporarily locked. Please try again later.
+                Too many tries! I’ve locked this account for a bit—check back soon?
               </span>
             ) : noAttempts ? (
               <span className="confirm-status-warn">No attempts left — please resend the code.</span>
