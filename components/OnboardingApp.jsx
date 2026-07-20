@@ -15,6 +15,7 @@ import {
   StepInvite,
   StepAllSet,
 } from './OnboardingSteps';
+import { toAmountString } from '@/lib/amount';
 
 // Baked-in defaults that used to live in TWEAK_DEFAULTS (tweaks-panel removed from prod build)
 const ACCENT_DEFAULTS = {
@@ -418,6 +419,12 @@ export default function OnboardingApp() {
   // (the initiator's, from the `expected` param) so the Accounting step can show
   // a specific "use the account for X" message. Empty string = no mismatch.
   const [xeroMismatch, setXeroMismatch] = useState('');
+  // Set when the Xero OAuth round-trip returns `xero=conflict` — the chosen Xero
+  // organisation is already linked to another entity, and an org can only be
+  // linked to one entity at a time. Holds that entity's name (from the
+  // `conflict_entity` param) so the Accounting step can name what to disconnect
+  // first, or 'unknown' when the backend omits it (generic copy). Empty = none.
+  const [xeroConflict, setXeroConflict] = useState('');
   // Guard the portal for SSR — document.body isn't there during server render.
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -710,6 +717,22 @@ export default function OnboardingApp() {
       } else {
         setXeroMismatch('');
       }
+      // One-org-one-entity block: the org the user picked is already linked to
+      // another entity. `conflict_entity` names it (URL-encoded) so the step can
+      // say which one to disconnect first; it can be absent in edge cases, so
+      // fall back to 'unknown' and let the step render generic copy. The backend
+      // revokes the grant it just created before redirecting, so the user is NOT
+      // connected — the xero state below must stay/return to disconnected.
+      if (xeroParam === 'conflict') {
+        setXeroConflict((p.get('conflict_entity') || '').trim() || 'unknown');
+      } else {
+        setXeroConflict('');
+      }
+      // A blocked attempt (mismatch/conflict) leaves the grant revoked backend-
+      // side. Force disconnected rather than restoring the stashed state, which
+      // would wrongly show "connected" for a user who was already linked to one
+      // org and tried to switch to a conflicting one.
+      const blocked = xeroParam === 'mismatch' || xeroParam === 'conflict';
       if (resumed) {
         if (resumed.token) setToken(resumed.token);
         if (resumed.profileUrl) setProfileUrl(resumed.profileUrl);
@@ -720,9 +743,13 @@ export default function OnboardingApp() {
           xero:
             xeroParam === 'connected'
               ? { connected: true, org: xeroOrg, lastConnected: today }
-              : (resumed.state && resumed.state.xero) || prev.xero,
+              : blocked
+                ? { ...((resumed.state && resumed.state.xero) || prev.xero), connected: false, org: '' }
+                : (resumed.state && resumed.state.xero) || prev.xero,
         }));
         setMaxReached((m) => Math.max(m, resumed.maxReached || 4, 4));
+      } else if (blocked) {
+        setState((prev) => ({ ...prev, xero: { ...prev.xero, connected: false, org: '' } }));
       } else if (xeroParam === 'connected') {
         setState((prev) => ({
           ...prev,
@@ -738,6 +765,7 @@ export default function OnboardingApp() {
         url.searchParams.delete('step');
         url.searchParams.delete('org');
         url.searchParams.delete('expected');
+        url.searchParams.delete('conflict_entity');
         window.history.replaceState({}, '', url.pathname + url.search + url.hash);
       } catch {
         /* ignore */
@@ -1150,7 +1178,9 @@ export default function OnboardingApp() {
           opening_date: p.openingDate,
           // Beginning petty-cash amount lives in opening_balance now (cash_addition
           // is forced to 0 by the backend); send it here so save and resume agree.
-          opening_balance: p.openingBalance,
+          // Normalized to an exact 2dp decimal string so the payload doesn't depend
+          // on whether the user blurred the field before saving.
+          opening_balance: toAmountString(p.openingBalance),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -1559,7 +1589,7 @@ export default function OnboardingApp() {
   // the selected modules: Bills (8) when bills is on, otherwise Others (7).
   const isLastContentStep = current === activeIds[activeIds.length - 2];
 
-  const stepProps = { state, set, next, back, skip, restart, submitEntity, submitModule, connectXero, disconnectXero, xeroMismatch, clearXeroMismatch: () => setXeroMismatch(''), submitSalesMethods, submitOpeningBalance, fetchExistingSalesMethods, accountOptions, submitAccountCodes, submitContacts, createContact, submitBills, submitInvite, cancelInvite, finishOnboarding, saveAndExit, isLastContentStep };
+  const stepProps = { state, set, next, back, skip, restart, submitEntity, submitModule, connectXero, disconnectXero, xeroMismatch, clearXeroMismatch: () => setXeroMismatch(''), xeroConflict, clearXeroConflict: () => setXeroConflict(''), submitSalesMethods, submitOpeningBalance, fetchExistingSalesMethods, accountOptions, submitAccountCodes, submitContacts, createContact, submitBills, submitInvite, cancelInvite, finishOnboarding, saveAndExit, isLastContentStep };
 
   return (
     <>

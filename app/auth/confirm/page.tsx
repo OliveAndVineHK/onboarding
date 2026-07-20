@@ -255,6 +255,8 @@ function ConfirmContent() {
               </span>
             ) : noAttempts ? (
               <span className="confirm-status-warn">No attempts left — please resend the code.</span>
+            ) : expired ? (
+              <span className="confirm-status-warn">This code has expired — please resend the code.</span>
             ) : attemptsLeft < MAX_ATTEMPTS ? (
               <>
                 {attemptsLeft} attempt{attemptsLeft === 1 ? "" : "s"} remaining
