@@ -79,7 +79,7 @@ export default function MintySelect({ value, onChange, options, placeholder = 'S
     const result = await onCreate(name);
     setCreateBusy(false);
     if (!result?.ok) {
-      setCreateError(result?.error || `Failed to create ${createNoun}. Please try again.`);
+      setCreateError(result?.error || `That didn't quite work—let's try adding that ${createNoun} again.`);
       return;
     }
     // Select the freshly created option (label) and close everything.
