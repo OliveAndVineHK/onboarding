@@ -382,7 +382,7 @@ export function StepSelectModule({ state, set, next, back, skip, submitModule, s
 }
 
 // --- Step 3: Connect to Xero ---
-export function StepConnectXero({ state, set, next, back, skip, connectXero, disconnectXero, xeroMismatch, clearXeroMismatch, saveAndExit }) {
+export function StepConnectXero({ state, set, next, back, skip, connectXero, disconnectXero, xeroMismatch, clearXeroMismatch, xeroConflict, clearXeroConflict, saveAndExit }) {
   const connected = state.xero.connected;
   const lastConnected = state.xero.lastConnected || '07 May 2026';
   const xeroEntity = state.xero.org || state.entity.name || 'Olive & Vine Inc';
@@ -394,6 +394,13 @@ export function StepConnectXero({ state, set, next, back, skip, connectXero, dis
     ? (xeroMismatch === 'unknown'
         ? 'You connected with the wrong Xero account. Please use the Xero account tied to your onboarding email.'
         : `You connected with the wrong Xero account. Please log in to Xero with ${xeroMismatch}.`)
+    : '';
+  // One-org-one-entity block: `xeroConflict` names the entity already using this
+  // Xero org. Wording matches the Settings toast for the same backend refusal.
+  const conflictMessage = xeroConflict
+    ? (xeroConflict === 'unknown'
+        ? 'Connection failed: this Xero organisation is already connected to another entity.'
+        : `Connection failed: this Xero organisation is already connected to "${xeroConflict}".`)
     : '';
 
   const handleDisconnect = async () => {
@@ -412,6 +419,10 @@ export function StepConnectXero({ state, set, next, back, skip, connectXero, dis
       <ErrorBanner
         message={mismatchMessage}
         onClose={() => typeof clearXeroMismatch === 'function' && clearXeroMismatch()}
+      />
+      <ErrorBanner
+        message={conflictMessage}
+        onClose={() => typeof clearXeroConflict === 'function' && clearXeroConflict()}
       />
       <div className="page-head" style={{ textAlign: 'center', maxWidth: 'none', marginBottom: 18 }}>
         <h2 style={{ fontSize: 30, display: 'inline-flex', alignItems: 'center', gap: 10, justifyContent: 'center' }}>
