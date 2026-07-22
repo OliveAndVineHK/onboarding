@@ -420,10 +420,10 @@ export default function OnboardingApp() {
   // a specific "use the account for X" message. Empty string = no mismatch.
   const [xeroMismatch, setXeroMismatch] = useState('');
   // Set when the Xero OAuth round-trip returns `xero=conflict` — the chosen Xero
-  // organisation is already linked to another entity, and an org can only be
-  // linked to one entity at a time. Holds that entity's name (from the
-  // `conflict_entity` param) so the Accounting step can name what to disconnect
-  // first, or 'unknown' when the backend omits it (generic copy). Empty = none.
+  // org is already linked to a different entity, so the backend refused to
+  // connect this one. Holds that entity's name (from the `conflict_entity`
+  // param) so the Accounting step can name what to disconnect first. Empty
+  // string = no conflict.
   const [xeroConflict, setXeroConflict] = useState('');
   // Guard the portal for SSR — document.body isn't there during server render.
   const [mounted, setMounted] = useState(false);
@@ -718,20 +718,18 @@ export default function OnboardingApp() {
         setXeroMismatch('');
       }
       // One-org-one-entity block: the org the user picked is already linked to
-      // another entity. `conflict_entity` names it (URL-encoded) so the step can
-      // say which one to disconnect first; it can be absent in edge cases, so
-      // fall back to 'unknown' and let the step render generic copy. The backend
-      // revokes the grant it just created before redirecting, so the user is NOT
-      // connected — the xero state below must stay/return to disconnected.
+      // another entity. `conflict_entity` names it (URL-encoded; searchParams
+      // decodes) so the step can say which one to disconnect first. It can be
+      // absent in edge cases, so fall back to 'unknown' and render generic copy.
       if (xeroParam === 'conflict') {
         setXeroConflict((p.get('conflict_entity') || '').trim() || 'unknown');
       } else {
         setXeroConflict('');
       }
-      // A blocked attempt (mismatch/conflict) leaves the grant revoked backend-
-      // side. Force disconnected rather than restoring the stashed state, which
-      // would wrongly show "connected" for a user who was already linked to one
-      // org and tried to switch to a conflicting one.
+      // A blocked attempt (mismatch/conflict) leaves the entity unconnected
+      // backend-side. Force disconnected rather than restoring the stashed
+      // state, which would wrongly show "connected" for a user who was already
+      // linked to one org and tried to switch to a conflicting one.
       const blocked = xeroParam === 'mismatch' || xeroParam === 'conflict';
       if (resumed) {
         if (resumed.token) setToken(resumed.token);
@@ -765,6 +763,7 @@ export default function OnboardingApp() {
         url.searchParams.delete('step');
         url.searchParams.delete('org');
         url.searchParams.delete('expected');
+        url.searchParams.delete('conflict');
         url.searchParams.delete('conflict_entity');
         window.history.replaceState({}, '', url.pathname + url.search + url.hash);
       } catch {
@@ -1400,15 +1399,15 @@ export default function OnboardingApp() {
     }
   };
 
-  const submitInvite = async ({ email, role }) => {
+  const submitInvite = async ({ email, role, first_name, last_name }) => {
     // Standalone prototype (no Module 1 handoff): keep the invite local-only.
-    if (!token || !state.entity.id) return { ok: true, invitation: { email, role } };
+    if (!token || !state.entity.id) return { ok: true, invitation: { email, role, first_name, last_name } };
     const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
     try {
       const res = await fetch(`${base}/api/onboarding/invite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ entity_id: state.entity.id, email, role }),
+        body: JSON.stringify({ entity_id: state.entity.id, email, role, first_name, last_name }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) return { ok: false, error: data.error || "That invite didn't go through! Want to try again?" };
