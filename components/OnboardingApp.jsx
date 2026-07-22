@@ -1396,15 +1396,15 @@ export default function OnboardingApp() {
     }
   };
 
-  const submitInvite = async ({ email, role }) => {
+  const submitInvite = async ({ email, role, first_name, last_name }) => {
     // Standalone prototype (no Module 1 handoff): keep the invite local-only.
-    if (!token || !state.entity.id) return { ok: true, invitation: { email, role } };
+    if (!token || !state.entity.id) return { ok: true, invitation: { email, role, first_name, last_name } };
     const base = (process.env.NEXT_PUBLIC_MODULE1_API_URL || 'http://localhost:5001').replace(/\/$/, '');
     try {
       const res = await fetch(`${base}/api/onboarding/invite`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ entity_id: state.entity.id, email, role }),
+        body: JSON.stringify({ entity_id: state.entity.id, email, role, first_name, last_name }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) return { ok: false, error: data.error || 'Failed to send invitation. Please try again.' };

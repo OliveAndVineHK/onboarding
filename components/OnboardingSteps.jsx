@@ -1524,7 +1524,12 @@ export function StepInvite({ state, set, next, back, submitInvite, cancelInvite,
     }
     setSending(true);
     const sentEmail = form.email.trim();
-    const result = await submitInvite({ email: sentEmail, role: roleToValue(form.role) });
+    const result = await submitInvite({
+      email: sentEmail,
+      role: roleToValue(form.role),
+      first_name: form.first.trim(),
+      last_name: form.last.trim(),
+    });
     setSending(false);
     if (!result.ok) {
       setError(result.error || 'Failed to send invitation.');
