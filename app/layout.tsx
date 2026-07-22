@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { ToastProvider } from "@/components/Toast";
 
 export const metadata: Metadata = {
   title: "Getting Started — Onboarding",
@@ -26,9 +25,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>
-        <ToastProvider>{children}</ToastProvider>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
